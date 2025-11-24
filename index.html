@@ -1,23 +1,26 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shopping List</title>
     <meta name="description" content="A premium, simple shopping list application.">
-    
+
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
+
     <!-- Styles -->
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <div class="background-gradient"></div>
-    
+
     <main class="app-container">
+
         <header class="app-header">
             <h1>Shopping List</h1>
             <p class="subtitle">Stay organized, buy smart.</p>
@@ -28,7 +31,8 @@
                 <input type="text" id="item-input" placeholder="Add a new item..." autocomplete="off">
                 <button id="add-btn" aria-label="Add item">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                            stroke-linejoin="round" />
                     </svg>
                 </button>
             </div>
@@ -41,9 +45,11 @@
             <div id="empty-state" class="empty-state hidden">
                 <p>Your list is empty.</p>
             </div>
-        </section>
+            <button id="delete-completed-btn" class="hidden">Delete Completed Items</button>
+</section>
     </main>
 
     <script src="app.js"></script>
 </body>
+
 </html>

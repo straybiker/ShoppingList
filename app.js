@@ -4,15 +4,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const addBtn = document.getElementById('add-btn');
     const shoppingList = document.getElementById('shopping-list');
     const emptyState = document.getElementById('empty-state');
+    const deleteCompletedBtn = document.getElementById('delete-completed-btn');
+
+    // URL Params
+    const urlParams = new URLSearchParams(window.location.search);
+    const listId = urlParams.get('list') || 'default';
+    const userName = urlParams.get('user') || 'Guest';
 
     // State
-    let items = JSON.parse(localStorage.getItem('shoppingListItems')) || [];
+    const STORAGE_KEY = `shoppingList_${listId}`;
+    let items = JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
 
     // Initialize
     renderItems();
 
     // Event Listeners
     addBtn.addEventListener('click', addItem);
+    deleteCompletedBtn.addEventListener('click', deleteCompletedItems);
     itemInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') addItem();
     });
@@ -25,7 +33,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const newItem = {
             id: Date.now(),
             text: text,
-            completed: false
+            completed: false,
+            amount: 1,
+            addedBy: userName
         };
 
         items.push(newItem);
@@ -38,6 +48,29 @@ document.addEventListener('DOMContentLoaded', () => {
         items = items.map(item => {
             if (item.id === id) {
                 return { ...item, completed: !item.completed };
+            }
+            return item;
+        });
+        saveAndRender();
+    }
+
+    function incrementItem(id) {
+        items = items.map(item => {
+            if (item.id === id) {
+                return { ...item, amount: (item.amount || 1) + 1 };
+            }
+            return item;
+        });
+        saveAndRender();
+    }
+
+    function decrementItem(id) {
+        items = items.map(item => {
+            if (item.id === id) {
+                const currentAmount = item.amount || 1;
+                if (currentAmount > 1) {
+                    return { ...item, amount: currentAmount - 1 };
+                }
             }
             return item;
         });
@@ -61,8 +94,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function deleteCompletedItems() {
+        items = items.filter(item => !item.completed);
+        saveAndRender();
+    }
+
     function saveAndRender() {
-        localStorage.setItem('shoppingListItems', JSON.stringify(items));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
         renderItems();
     }
 
@@ -82,20 +120,50 @@ document.addEventListener('DOMContentLoaded', () => {
                 li.innerHTML = `
                     <div class="item-content">
                         <div class="checkbox"></div>
-                        <span class="item-text">${escapeHtml(item.text)}</span>
+                        <div class="text-content">
+                            ${item.addedBy ? `<span class="item-author">${escapeHtml(item.addedBy)}</span>` : ''}
+                            <span class="item-text">${escapeHtml(item.text)}</span>
+                        </div>
                     </div>
-                    <button class="delete-btn" aria-label="Delete item">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M3 6h18"></path>
-                            <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-                            <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-                        </svg>
-                    </button>
+                    <div class="item-actions">
+                        <div class="qty-controls" onclick="event.stopPropagation()">
+                            <span class="qty-display">${item.amount || 1}</span>
+                            <button class="qty-btn minus" aria-label="Decrease quantity">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M5 12h14"/>
+                                </svg>
+                            </button>
+                            <button class="qty-btn plus" aria-label="Increase quantity">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 5v14M5 12h14"/>
+                                </svg>
+                            </button>
+                        </div>
+                        <button class="delete-btn" aria-label="Delete item">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 6h18"></path>
+                                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                            </svg>
+                        </button>
+                    </div>
                 `;
 
                 // Event listeners for this item
                 const contentDiv = li.querySelector('.item-content');
                 contentDiv.addEventListener('click', () => toggleItem(item.id));
+
+                const minusBtn = li.querySelector('.minus');
+                minusBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    decrementItem(item.id);
+                });
+
+                const plusBtn = li.querySelector('.plus');
+                plusBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    incrementItem(item.id);
+                });
 
                 const deleteBtn = li.querySelector('.delete-btn');
                 deleteBtn.addEventListener('click', (e) => {
@@ -105,6 +173,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 shoppingList.appendChild(li);
             });
+            // Show/hide Delete Completed button
+            const hasCompleted = items.some(item => item.completed);
+            if (hasCompleted) {
+                deleteCompletedBtn.classList.remove('hidden');
+            } else {
+                deleteCompletedBtn.classList.add('hidden');
+            }
         }
     }
 
