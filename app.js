@@ -5,6 +5,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const shoppingList = document.getElementById('shopping-list');
     const emptyState = document.getElementById('empty-state');
     const deleteCompletedBtn = document.getElementById('delete-completed-btn');
+    const sortAzBtn = document.getElementById('sort-az-btn');
+    const sortZaBtn = document.getElementById('sort-za-btn');
 
     // URL Params
     const urlParams = new URLSearchParams(window.location.search);
@@ -21,6 +23,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Event Listeners
     addBtn.addEventListener('click', addItem);
     deleteCompletedBtn.addEventListener('click', deleteCompletedItems);
+    sortAzBtn.addEventListener('click', () => sortItems('asc'));
+    sortZaBtn.addEventListener('click', () => sortItems('desc'));
     itemInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') addItem();
     });
@@ -107,10 +111,23 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderItems() {
         shoppingList.innerHTML = '';
 
+        // Show/hide List Controls (Sort + Delete)
+        const listControls = document.getElementById('list-controls');
+        const sortControls = document.querySelector('.sort-controls');
+
         if (items.length === 0) {
             emptyState.classList.remove('hidden');
+            listControls.classList.add('hidden');
         } else {
             emptyState.classList.add('hidden');
+            listControls.classList.remove('hidden');
+
+            // Sort Controls Visibility (Only show if > 1 item)
+            if (items.length > 1) {
+                sortControls.classList.remove('hidden');
+            } else {
+                sortControls.classList.add('hidden');
+            }
 
             items.forEach(item => {
                 const li = document.createElement('li');
@@ -173,14 +190,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 shoppingList.appendChild(li);
             });
-            // Show/hide Delete Completed button
+
+            // Handle Delete Completed button visibility specifically
             const hasCompleted = items.some(item => item.completed);
             if (hasCompleted) {
                 deleteCompletedBtn.classList.remove('hidden');
+                deleteCompletedBtn.style.visibility = 'visible';
             } else {
                 deleteCompletedBtn.classList.add('hidden');
             }
         }
+    }
+
+    function sortItems(direction) {
+        items.sort((a, b) => {
+            const textA = a.text.toLowerCase();
+            const textB = b.text.toLowerCase();
+            if (direction === 'asc') {
+                return textA.localeCompare(textB);
+            } else {
+                return textB.localeCompare(textA);
+            }
+        });
+        saveAndRender();
     }
 
     function escapeHtml(text) {
