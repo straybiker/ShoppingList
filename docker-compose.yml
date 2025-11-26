@@ -6,4 +6,6 @@ services:
     container_name: shopping-list-app
     ports:
       - "8081:80"
+    volumes:
+      - ./data:/usr/src/app/data
     restart: unless-stopped

@@ -1,13 +1,21 @@
-# Use nginx alpine for a lightweight web server
-FROM nginx:alpine
+# Use Node.js alpine image
+FROM node:18-alpine
 
-# Copy the application files to nginx html directory
-COPY index.html /usr/share/nginx/html/
-COPY style.css /usr/share/nginx/html/
-COPY app.js /usr/share/nginx/html/
+# Create app directory
+WORKDIR /usr/src/app
+
+# Copy package.json
+COPY package.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy source files
+COPY server.js ./
+COPY public ./public
 
 # Expose port 80
 EXPOSE 80
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Start server
+CMD [ "node", "server.js" ]

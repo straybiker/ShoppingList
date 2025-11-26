@@ -43,11 +43,19 @@ The user name will be displayed above each item they add.
 
 ## How to Run
 
-### Local Development
+### Local Development (Node.js)
 
-1. Clone the repository or download the files
-2. Open `index.html` in your web browser
-3. Start adding items to your shopping list!
+1. Install Node.js
+2. Open a terminal in the project folder
+3. Install dependencies:
+   ```bash
+   npm install
+   ```
+4. Start the server:
+   ```bash
+   npm start
+   ```
+5. Open `http://localhost:80` (or the port shown in terminal)
 
 ### Docker Deployment
 
@@ -55,7 +63,7 @@ The user name will be displayed above each item they add.
 
 ```bash
 # Build and start the container
-docker-compose up -d
+docker compose up -d --build
 
 # Access the app at http://localhost:8081
 ```
