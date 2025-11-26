@@ -32,6 +32,33 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Enter') addItem();
     });
 
+    // Event delegation for list item interactions
+    shoppingList.addEventListener('click', (e) => {
+        const target = e.target.closest('[data-action]');
+        if (!target) return;
+
+        const listItem = target.closest('.list-item');
+        if (!listItem) return;
+
+        const itemId = parseInt(listItem.getAttribute('data-id'));
+        const action = target.getAttribute('data-action');
+
+        switch (action) {
+            case 'toggle':
+                toggleItem(itemId);
+                break;
+            case 'increment':
+                incrementItem(itemId);
+                break;
+            case 'decrement':
+                decrementItem(itemId);
+                break;
+            case 'delete':
+                deleteItem(itemId);
+                break;
+        }
+    });
+
     // Functions
     async function loadItems() {
         try {
@@ -69,15 +96,31 @@ document.addEventListener('DOMContentLoaded', () => {
         const text = itemInput.value.trim();
         if (text === '') return;
 
-        const newItem = {
-            id: Date.now(),
-            text: text,
-            completed: false,
-            amount: 1,
-            addedBy: userName
-        };
+        // Check if item with same name already exists (case-insensitive)
+        const existingItem = items.find(item =>
+            item.text.toLowerCase() === text.toLowerCase()
+        );
 
-        items.push(newItem);
+        if (existingItem) {
+            // Increment existing item's amount
+            items = items.map(item => {
+                if (item.id === existingItem.id) {
+                    return { ...item, amount: (item.amount || 1) + 1 };
+                }
+                return item;
+            });
+        } else {
+            // Create new item
+            const newItem = {
+                id: Date.now(),
+                text: text,
+                completed: false,
+                amount: 1,
+                addedBy: userName
+            };
+            items.push(newItem);
+        }
+
         saveAndRender();
         itemInput.value = '';
         itemInput.focus();
@@ -167,7 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 li.innerHTML = `
                     <div class="item-content">
-                        <div class="checkbox" onclick="toggleItem(${item.id})"></div>
+                        <div class="checkbox" data-action="toggle"></div>
                         <div class="text-content">
                             ${item.addedBy && item.addedBy !== 'Guest' ? `<span class="item-author">${escapeHtml(item.addedBy)}</span>` : ''}
                             <span class="item-text">${escapeHtml(item.text)}</span>
@@ -175,11 +218,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div class="item-actions">
                         <div class="qty-controls">
-                            <button class="qty-btn" onclick="decrementItem(${item.id})">-</button>
                             <span class="qty-display">${item.amount || 1}</span>
-                            <button class="qty-btn" onclick="incrementItem(${item.id})">+</button>
+                            <button class="qty-btn" data-action="increment">+</button>
+                            <button class="qty-btn" data-action="decrement">-</button>
                         </div>
-                        <button class="delete-btn" onclick="deleteItem(${item.id})">
+                        <button class="delete-btn" data-action="delete">
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                         </button>
                     </div>
@@ -203,10 +246,4 @@ document.addEventListener('DOMContentLoaded', () => {
         div.textContent = text;
         return div.innerHTML;
     }
-
-    // Expose functions to global scope for onclick handlers
-    window.toggleItem = toggleItem;
-    window.incrementItem = incrementItem;
-    window.decrementItem = decrementItem;
-    window.deleteItem = deleteItem;
 });
