@@ -20,6 +20,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize
     loadItems();
 
+    // Auto-refresh every 2 seconds
+    setInterval(loadItems, 2000);
+
     // Event Listeners
     addBtn.addEventListener('click', addItem);
     deleteCompletedBtn.addEventListener('click', deleteCompletedItems);
@@ -34,8 +37,13 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const response = await fetch(`${API_URL}/${listId}`);
             if (response.ok) {
-                items = await response.json();
-                renderItems();
+                const newItems = await response.json();
+
+                // Only re-render if data has changed
+                if (JSON.stringify(newItems) !== JSON.stringify(items)) {
+                    items = newItems;
+                    renderItems();
+                }
             }
         } catch (error) {
             console.error('Error loading items:', error);

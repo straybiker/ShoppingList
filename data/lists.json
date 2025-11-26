@@ -1,3 +1,19 @@
 {
-  "default": []
+  "default": [
+    {
+      "id": 1764192779932,
+      "text": "test",
+      "completed": false,
+      "amount": 1,
+      "addedBy": "Guest"
+    }
+  ],
+  "test-list-1764192610232": [
+    {
+      "id": 1,
+      "text": "Milk",
+      "completed": false,
+      "amount": 1
+    }
+  ]
 }
