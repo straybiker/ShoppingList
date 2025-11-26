@@ -67,7 +67,7 @@ docker-compose up -d
 docker build -t shopping-list .
 
 # Run the container
-docker run -d -p 8081:81 --name shopping-list-app shopping-list
+docker run -d -p 8081:80 --name shopping-list-app shopping-list
 
 # Access the app at http://localhost:8081
 ```
