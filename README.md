@@ -57,7 +57,7 @@ The user name will be displayed above each item they add.
 # Build and start the container
 docker-compose up -d
 
-# Access the app at http://localhost:8080
+# Access the app at http://localhost:8081
 ```
 
 #### Using Docker CLI
@@ -67,9 +67,9 @@ docker-compose up -d
 docker build -t shopping-list .
 
 # Run the container
-docker run -d -p 8080:80 --name shopping-list-app shopping-list
+docker run -d -p 8081:81 --name shopping-list-app shopping-list
 
-# Access the app at http://localhost:8080
+# Access the app at http://localhost:8081
 ```
 
 #### Stop and Remove
