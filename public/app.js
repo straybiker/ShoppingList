@@ -120,7 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function toggleItem(id) {
-        const item = items.find(i => i.id === id);
+        const item = items.find(i => String(i.id) === id);
         if (!item) return;
 
         const newCompleted = !item.completed;
@@ -146,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function incrementItem(id) {
-        const item = items.find(i => i.id === id);
+        const item = items.find(i => String(i.id) === id);
         if (!item) return;
 
         const newAmount = (item.amount || 1) + 1;
@@ -172,7 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function decrementItem(id) {
-        const item = items.find(i => i.id === id);
+        const item = items.find(i => String(i.id) === id);
         if (!item) return;
 
         const currentAmount = item.amount || 1;
@@ -208,7 +208,7 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (response.ok) {
-                items = items.filter(item => item.id !== id);
+                items = items.filter(item => String(item.id) !== id);
                 renderItems();
             }
         } catch (error) {
@@ -290,7 +290,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const processedIds = new Set();
 
         items.forEach(item => {
-            processedIds.add(item.id);
+            processedIds.add(String(item.id));
             let li = existingElements.get(String(item.id));
 
             if (li) {

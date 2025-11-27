@@ -285,7 +285,8 @@ app.patch('/api/items/:listId/:itemId', async (req, res) => {
             return res.status(404).json({ error: 'List not found' });
         }
 
-        const itemIndex = data[listId].findIndex(item => item.id === itemId);
+        // Use String() comparison to handle legacy number IDs
+        const itemIndex = data[listId].findIndex(item => String(item.id) === itemId);
         if (itemIndex === -1) {
             return res.status(404).json({ error: 'Item not found' });
         }
@@ -347,7 +348,8 @@ app.delete('/api/items/:listId/:itemId', async (req, res) => {
             return res.status(404).json({ error: 'List not found' });
         }
 
-        data[listId] = data[listId].filter(item => item.id !== itemId);
+        // Use String() comparison to handle legacy number IDs
+        data[listId] = data[listId].filter(item => String(item.id) !== itemId);
         await writeData(data);
 
         res.json({ success: true });
