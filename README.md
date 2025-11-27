@@ -1,61 +1,63 @@
 # Shopping List App
 
-A premium, simple shopping list application built with vanilla HTML, CSS, and JavaScript.
-
-![Shopping List App Screenshot](C:/Users/stray/.gemini/antigravity/brain/27436429-b51a-4c7a-b131-0768fcec8060/shopping_list_screenshot_1764105898811.png)
+A modern, real-time shopping list application built with Node.js, Express, and vanilla HTML/CSS/JS.
 
 ## Features
 
-- **Add Items**: Quickly add items to your list
-- **Edit Quantity**: Increase or decrease item quantities
-- **Mark as Completed**: Check off items as you shop
-- **Sort Items**: Sort your list alphabetically (A-Z or Z-A)
-  - *Note: Sort buttons appear only when there is more than one item.*
-- **Delete Items**: Remove individual items or delete all completed items at once
-- **Local Storage**: Your list is saved automatically to your browser's local storage
-- **Multi-User Support**: Share lists via URL parameters
+- **Real-time Synchronization**: Updates appear instantly across all connected devices using Server-Sent Events (SSE).
+- **Backend Storage**: Lists are saved persistently on the server (JSON file storage), allowing access from any device.
+- **Multi-User & Multi-List**: Create separate lists and track who added items via URL parameters.
+- **Smart UI**:
+  - Dark premium theme with glassmorphism effects.
+  - Responsive design for mobile and desktop.
+  - Accessible custom checkboxes.
+  - Toast notifications for feedback.
+- **List Management**:
+  - Add, edit quantity, and delete items.
+  - Mark items as completed.
+  - "Delete Completed" button to clean up the list.
+  - Sort items alphabetically (A-Z, Z-A).
+- **Security & Performance**:
+  - Rate limiting (100 requests/15 min per IP).
+  - Input validation (128 char limit).
+  - Write queue system to handle concurrent updates safely.
 
 ## URL Parameters
 
-You can customize the shopping list using URL parameters:
+Customize your experience using URL parameters:
 
 ### List ID
 Create separate lists by adding a `list` parameter:
 ```
-index.html?list=groceries
-index.html?list=hardware_store
+http://localhost:3000/?list=groceries
+http://localhost:3000/?list=hardware_store
 ```
-Each list ID maintains its own separate items in local storage.
+*Default list: "default"*
 
 ### User Name
 Track who added items by including a `user` parameter:
 ```
-index.html?user=John
-index.html?list=family_shopping&user=Sarah
+http://localhost:3000/?user=John
+http://localhost:3000/?list=family&user=Sarah
 ```
-The user name will be displayed above each item they add.
+*Default user: "Guest"*
 
-### Example URLs
-- `index.html` - Default list, Guest user
-- `index.html?list=weekly` - "weekly" list, Guest user
-- `index.html?user=Mom` - Default list, items tagged as added by "Mom"
-- `index.html?list=groceries&user=Dad` - "groceries" list, items tagged as added by "Dad"
+## Installation & Running
 
-## How to Run
+### Local Development
 
-### Local Development (Node.js)
-
-1. Install Node.js
-2. Open a terminal in the project folder
-3. Install dependencies:
+1. **Prerequisites**: Ensure Node.js is installed.
+2. **Install Dependencies**:
    ```bash
    npm install
    ```
-4. Start the server:
+3. **Start the Server**:
    ```bash
    npm start
    ```
-5. Open `http://localhost:80` (or the port shown in terminal)
+   The server will start on **port 3000** by default.
+4. **Access the App**:
+   Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### Docker Deployment
 
@@ -74,26 +76,14 @@ docker compose up -d --build
 # Build the image
 docker build -t shopping-list .
 
-# Run the container
-docker run -d -p 8081:80 --name shopping-list-app shopping-list
-
-# Access the app at http://localhost:8081
-```
-
-#### Stop and Remove
-
-```bash
-# Using Docker Compose
-docker-compose down
-
-# Using Docker CLI
-docker stop shopping-list-app
-docker rm shopping-list-app
+# Run the container (mapping host port 8081 to container port 3000)
+docker run -d -p 8081:3000 --name shopping-list-app shopping-list
 ```
 
 ## Technologies
 
-- HTML5
-- CSS3 (Custom properties, Flexbox, Animations)
-- JavaScript (ES6+)
-- LocalStorage API
+- **Frontend**: HTML5, CSS3 (Variables, Flexbox, Animations), Vanilla JavaScript (ES6+).
+- **Backend**: Node.js, Express.
+- **Real-time**: Server-Sent Events (SSE).
+- **Data**: JSON file-based persistence.
+- **Containerization**: Docker.
