@@ -246,6 +246,62 @@ input[type="text"]::placeholder {
     display: block;
 }
 
+/* New accessible checkbox input + custom label */
+.checkbox-input {
+    /* Visually hide native input but keep it accessible */
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0 0 0 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+}
+
+.checkbox-custom {
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--glass-border);
+    border-radius: 50%;
+    display: inline-flex; /* use flexbox to center the check */
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition-fast);
+    flex-shrink: 0;
+    background: transparent;
+    box-sizing: border-box;
+}
+
+.checkbox-input:focus + .checkbox-custom {
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.12);
+    border-color: var(--accent-color);
+    outline: none;
+}
+
+.checkbox-custom::after {
+    content: '✓';
+    color: white;
+    font-size: 13px;
+    font-weight: 700;
+    display: none;
+    line-height: 1;
+    /* ensure the check sits exactly centered */
+    margin: 0;
+    padding: 0;
+    transform: translateY(-1px);
+}
+
+.checkbox-input:checked + .checkbox-custom {
+    background: var(--success-color);
+    border-color: var(--success-color);
+}
+
+.checkbox-input:checked + .checkbox-custom::after {
+    display: block;
+}
+
 .item-content {
     display: flex;
     align-items: center;
@@ -257,6 +313,9 @@ input[type="text"]::placeholder {
     display: flex;
     flex-direction: column;
     justify-content: center;
+
+    /* Allow this flex child to shrink below its content width so long words don't force the actions out */
+    min-width: 0;
 }
 
 .item-author {
@@ -270,6 +329,10 @@ input[type="text"]::placeholder {
 .item-text {
     font-size: 1rem;
     transition: var(--transition-fast);
+    /* allow long words to break/wrap instead of overflowing */
+    white-space: normal;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .list-item.completed .item-text {
@@ -320,6 +383,17 @@ input[type="text"]::placeholder {
     background: var(--accent-hover);
     transform: translateY(-1px);
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+}
+
+/* Prevent long unbroken words from overflowing buttons: allow wrapping */
+.qty-btn,
+.sort-btn,
+.delete-btn,
+#delete-completed-btn,
+#add-btn {
+    white-space: normal; /* allow wrapping */
+    overflow-wrap: anywhere; /* break long words anywhere if needed */
+    word-break: break-word; /* fallback for older engines */
 }
 
 .delete-btn {
@@ -399,6 +473,34 @@ input[type="text"]::placeholder {
 
 #delete-completed-btn:active {
     transform: translateY(1px);
+}
+
+/* Utility hidden class */
+.hidden {
+    display: none !important;
+}
+
+/* Toast styles */
+.app-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%) translateY(12px);
+    background: rgba(24, 27, 34, 0.95);
+    color: var(--text-primary);
+    padding: 10px 16px;
+    border-radius: 8px;
+    box-shadow: 0 6px 24px rgba(2,6,23,0.6);
+    opacity: 0;
+    transition: opacity 240ms ease, transform 240ms ease;
+    z-index: 10000;
+    pointer-events: none;
+}
+
+.app-toast.visible {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    pointer-events: auto;
 }
 
 /* Empty State */

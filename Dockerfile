@@ -14,8 +14,8 @@ RUN npm install
 COPY server.js ./
 COPY public ./public
 
-# Expose port 80
-EXPOSE 80
+# Expose port 3000
+EXPOSE 3000
 
 # Start server
 CMD [ "node", "server.js" ]
