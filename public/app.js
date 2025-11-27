@@ -18,6 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let items = [];
     let currentSortDirection = null; // 'asc' or 'desc'
     let isUpdating = false;
+    let isConfigMode = false;
+    let previousListId = null; // Store previous list ID for return
     let eventSource = null;
     let reconnectAttempts = 0;
     const MAX_RECONNECT_ATTEMPTS = 5;
@@ -40,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Functions
     async function loadItems() {
+        if (isConfigMode) return; // Don't load items in config mode
         if (isUpdating) return; // Skip refresh if user is updating
 
         try {
@@ -65,9 +68,51 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function loadLists() {
+        try {
+            const response = await fetch('/api/lists');
+            if (response.ok) {
+                const lists = await response.json();
+                // Map lists to item structure for rendering
+                items = lists.map(name => ({
+                    id: name,
+                    text: name,
+                    completed: false,
+                    amount: null,
+                    addedBy: null
+                }));
+                renderItems();
+            }
+        } catch (error) {
+            console.error('Error loading lists:', error);
+            showError('Error loading lists');
+        }
+    }
+
     async function addItem() {
         const text = itemInput.value.trim();
         if (text === '') return;
+
+        // Handle Slash Commands
+        if (text.startsWith('/')) {
+            if (text === '/clear-cache') {
+                await clearList();
+                itemInput.value = '';
+                return;
+            } else if (text === '/config') {
+                isConfigMode = true;
+                previousListId = listId; // Store current list
+                itemInput.value = '';
+                itemInput.placeholder = 'Enter command...'; // Update placeholder
+                document.querySelector('.app-header h1').textContent = 'Configuration';
+                document.querySelector('.subtitle').textContent = 'Manage Lists';
+                await loadLists();
+                return;
+            } else {
+                showError('Unknown command. Only /clear-cache and /config are supported.');
+                return;
+            }
+        }
 
         // Check if item with same name already exists (case-insensitive)
         const existingItem = items.find(item =>
@@ -201,6 +246,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function deleteItem(id) {
+        if (isConfigMode) {
+            await deleteList(id);
+            return;
+        }
+
         isUpdating = true;
         try {
             const response = await fetch(`${API_URL}/${listId}/${id}`, {
@@ -219,6 +269,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function deleteList(id) {
+        try {
+            const response = await fetch(`/api/lists/${id}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                showToast(`List "${id}" deleted successfully`, 'success');
+                await loadLists();
+            } else {
+                showError('Failed to delete list');
+            }
+        } catch (error) {
+            console.error('Error deleting list:', error);
+            showError('Error deleting list');
+        }
+    }
+
     async function deleteCompletedItems() {
         isUpdating = true;
         try {
@@ -233,6 +301,28 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Error deleting completed items:', error);
             showError('Error deleting completed items');
+        } finally {
+            isUpdating = false;
+        }
+    }
+
+    async function clearList() {
+        isUpdating = true;
+        try {
+            const response = await fetch(`${API_URL}/${listId}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                items = [];
+                renderItems();
+                showToast('List cleared successfully', 'success');
+            } else {
+                showError('Failed to clear list');
+            }
+        } catch (error) {
+            console.error('Error clearing list:', error);
+            showError('Error clearing list');
         } finally {
             isUpdating = false;
         }
@@ -263,18 +353,34 @@ document.addEventListener('DOMContentLoaded', () => {
         const listControls = document.getElementById('list-controls');
         const sortControls = document.querySelector('.sort-controls');
 
-        if (items.length === 0) {
+        if (!items || items.length === 0) {
             emptyState.classList.remove('hidden');
             listControls.classList.add('hidden');
             shoppingList.innerHTML = ''; // Clear list if empty
+
+            if (isConfigMode) {
+                const targetList = previousListId || 'default';
+                const returnLi = document.createElement('li');
+                returnLi.className = 'list-item';
+                returnLi.style.justifyContent = 'center';
+                returnLi.style.cursor = 'pointer';
+                returnLi.style.marginTop = '20px';
+                returnLi.innerHTML = `
+                    <button class="sort-btn" id="return-btn" style="width: 100%;">Return to ${escapeHtml(targetList)}</button>
+                `;
+                returnLi.addEventListener('click', () => {
+                    window.location.href = `/?user=${urlParams.get('user') || 'Guest'}&list=${targetList}`;
+                });
+                shoppingList.appendChild(returnLi);
+            }
             return;
         }
 
         emptyState.classList.add('hidden');
         listControls.classList.remove('hidden');
 
-        // Sort Controls Visibility (Only show if > 1 item)
-        if (items.length > 1) {
+        // Sort Controls Visibility (Only show if > 1 item and NOT in config mode)
+        if (items.length > 1 && !isConfigMode) {
             sortControls.classList.remove('hidden');
         } else {
             sortControls.classList.add('hidden');
@@ -305,28 +411,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     textSpan.textContent = item.text;
                 }
 
-                // Update author if changed
-                const authorSpan = li.querySelector('.item-author');
-                const shouldHaveAuthor = item.addedBy && item.addedBy !== 'Guest';
-                if (shouldHaveAuthor) {
-                    if (!authorSpan) {
-                        // Insert author span if missing
-                        const textContentDiv = li.querySelector('.text-content');
-                        const newAuthorSpan = document.createElement('span');
-                        newAuthorSpan.className = 'item-author';
-                        newAuthorSpan.textContent = item.addedBy;
-                        textContentDiv.insertBefore(newAuthorSpan, textSpan);
-                    } else if (authorSpan.textContent !== item.addedBy) {
-                        authorSpan.textContent = item.addedBy;
+                // Update author if changed (skip in config mode)
+                if (!isConfigMode) {
+                    const authorSpan = li.querySelector('.item-author');
+                    const shouldHaveAuthor = item.addedBy && item.addedBy !== 'Guest';
+                    if (shouldHaveAuthor) {
+                        if (!authorSpan) {
+                            // Insert author span if missing
+                            const textContentDiv = li.querySelector('.text-content');
+                            const newAuthorSpan = document.createElement('span');
+                            newAuthorSpan.className = 'item-author';
+                            newAuthorSpan.textContent = item.addedBy;
+                            textContentDiv.insertBefore(newAuthorSpan, textSpan);
+                        } else if (authorSpan.textContent !== item.addedBy) {
+                            authorSpan.textContent = item.addedBy;
+                        }
+                    } else if (authorSpan) {
+                        authorSpan.remove();
                     }
-                } else if (authorSpan) {
-                    authorSpan.remove();
-                }
 
-                // Update amount
-                const qtyDisplay = li.querySelector('.qty-display');
-                if (qtyDisplay && qtyDisplay.textContent !== String(item.amount || 1)) {
-                    qtyDisplay.textContent = item.amount || 1;
+                    // Update amount
+                    const qtyDisplay = li.querySelector('.qty-display');
+                    if (qtyDisplay && qtyDisplay.textContent !== String(item.amount || 1)) {
+                        qtyDisplay.textContent = item.amount || 1;
+                    }
                 }
 
                 // Ensure order (appendChild moves it to the end if it exists elsewhere)
@@ -338,29 +446,64 @@ document.addEventListener('DOMContentLoaded', () => {
                 li.className = `list-item ${item.completed ? 'completed' : ''}`;
                 li.setAttribute('data-id', item.id);
 
+                const checkboxHtml = isConfigMode ? '' : `
+                    <input type="checkbox" id="item-${item.id}" class="checkbox-input" ${item.completed ? 'checked' : ''} aria-label="Toggle ${escapeHtml(item.text)}">
+                    <label for="item-${item.id}" class="checkbox-custom"></label>
+                `;
+
+                const authorHtml = (!isConfigMode && item.addedBy && item.addedBy !== 'Guest')
+                    ? `<span class="item-author">${escapeHtml(item.addedBy)}</span>`
+                    : '';
+
+                const qtyHtml = isConfigMode ? `
+                    <button class="qty-btn" data-action="open" aria-label="Open list ${escapeHtml(item.text)}" style="width: auto; padding: 0 8px;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                    </button>
+                ` : `
+                    <div class="qty-controls">
+                        <span class="qty-display">${item.amount || 1}</span>
+                        <button class="qty-btn" data-action="increment" aria-label="Increase quantity for ${escapeHtml(item.text)}">+</button>
+                        <button class="qty-btn" data-action="decrement" aria-label="Decrease quantity for ${escapeHtml(item.text)}">-</button>
+                    </div>
+                `;
+
+                const deleteIconColor = isConfigMode ? 'color: var(--danger-color);' : '';
+
                 li.innerHTML = `
-                    <div class="item-content" data-action="toggle">
-                        <input type="checkbox" id="item-${item.id}" class="checkbox-input" ${item.completed ? 'checked' : ''} aria-label="Toggle ${escapeHtml(item.text)}">
-                        <label for="item-${item.id}" class="checkbox-custom"></label>
+                    <div class="item-content" data-action="${isConfigMode ? '' : 'toggle'}">
+                        ${checkboxHtml}
                         <div class="text-content">
-                            ${item.addedBy && item.addedBy !== 'Guest' ? `<span class="item-author">${escapeHtml(item.addedBy)}</span>` : ''}
+                            ${authorHtml}
                             <span class="item-text">${escapeHtml(item.text)}</span>
                         </div>
                     </div>
                     <div class="item-actions">
-                        <div class="qty-controls">
-                            <span class="qty-display">${item.amount || 1}</span>
-                            <button class="qty-btn" data-action="increment" aria-label="Increase quantity for ${escapeHtml(item.text)}">+</button>
-                            <button class="qty-btn" data-action="decrement" aria-label="Decrease quantity for ${escapeHtml(item.text)}">-</button>
-                        </div>
-                        <button class="delete-btn" data-action="delete" aria-label="Delete ${escapeHtml(item.text)}">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        ${qtyHtml}
+                        <button class="delete-btn" data-action="delete" aria-label="Delete ${escapeHtml(item.text)}" style="${deleteIconColor}">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                         </button>
                     </div>
                 `;
                 shoppingList.appendChild(li);
             }
         });
+
+        // Add Return Button in Config Mode (Always show)
+        if (isConfigMode) {
+            const targetList = previousListId || 'default';
+            const returnLi = document.createElement('li');
+            returnLi.className = 'list-item';
+            returnLi.style.justifyContent = 'center';
+            returnLi.style.cursor = 'pointer';
+            returnLi.style.marginTop = '20px';
+            returnLi.innerHTML = `
+                <button class="sort-btn" id="return-btn" style="width: 100%;">Return to ${escapeHtml(targetList)}</button>
+            `;
+            returnLi.addEventListener('click', () => {
+                window.location.href = `/?user=${urlParams.get('user') || 'Guest'}&list=${targetList}`;
+            });
+            shoppingList.appendChild(returnLi);
+        }
 
         // Remove elements that are no longer in the list
         existingElements.forEach((el, id) => {
@@ -369,9 +512,9 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Show/Hide Delete Completed Button
+        // Show/Hide Delete Completed Button (Hide in config mode)
         const hasCompleted = items.some(item => item.completed);
-        if (hasCompleted) {
+        if (hasCompleted && !isConfigMode) {
             deleteCompletedBtn.classList.remove('hidden');
             deleteCompletedBtn.style.visibility = 'visible';
         } else {
@@ -386,9 +529,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Simple toast for user-visible errors
-    function showToast(message, duration = 4000) {
+    function showToast(message, type = 'default', duration = 4000) {
         const toast = document.createElement('div');
-        toast.className = 'app-toast';
+        toast.className = `app-toast ${type}`;
         toast.textContent = message;
         document.body.appendChild(toast);
 
@@ -406,7 +549,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function showError(message) {
         console.error(message);
         try {
-            showToast(message);
+            showToast(message, 'error');
         } catch (e) {
             // fallback
         }
@@ -454,6 +597,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Initialize
+    renderItems(); // Show empty state immediately if needed
     loadItems();
     setupSSE();
 
@@ -470,7 +614,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (sortZaBtn) sortZaBtn.addEventListener('click', () => sortItems('desc'));
 
     if (itemInput) {
-        itemInput.addEventListener('keypress', (e) => {
+        itemInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') addItem();
         });
     }
@@ -499,6 +643,9 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'delete':
                 deleteItem(itemId);
                 break;
+            case 'open':
+                window.location.href = `/?user=${urlParams.get('user') || 'Guest'}&list=${itemId}`;
+                break;
         }
     });
 
@@ -509,4 +656,3 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 });
-

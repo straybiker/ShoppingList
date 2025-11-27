@@ -70,46 +70,43 @@ async function readData() {
     }
 }
 
-// Helper to write data
-async function writeData(data) {
-    // Enqueue write requests and process them sequentially to avoid
-    // read-modify-write race conditions when multiple requests come in
-    // at the same time.
-    return enqueueWrite(data);
-}
-
-// Simple write queue to serialize writes to disk
-const writeQueue = [];
-let writeInProgress = false;
-
-function enqueueWrite(data) {
-    return new Promise((resolve, reject) => {
-        writeQueue.push({ data, resolve, reject });
-        processWriteQueue().catch(err => {
-            // processWriteQueue handles errors per item; log as a fallback
-            console.error('Error processing write queue:', err);
-        });
-    });
-}
-
-async function processWriteQueue() {
-    if (writeInProgress) return;
-    writeInProgress = true;
-
-    while (writeQueue.length > 0) {
-        const { data, resolve, reject } = writeQueue.shift();
-        try {
-            await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2));
-            // Notify clients after successful write
-            broadcastChange();
-            resolve();
-        } catch (err) {
-            console.error('Error writing data file:', err);
-            reject(err);
-        }
+// Mutex for atomic operations
+class Mutex {
+    constructor() {
+        this.queue = [];
+        this.locked = false;
     }
 
-    writeInProgress = false;
+    async run(fn) {
+        return new Promise((resolve, reject) => {
+            this.queue.push({ fn, resolve, reject });
+            this.process();
+        });
+    }
+
+    async process() {
+        if (this.locked || this.queue.length === 0) return;
+        this.locked = true;
+
+        const { fn, resolve, reject } = this.queue.shift();
+        try {
+            const result = await fn();
+            resolve(result);
+        } catch (error) {
+            reject(error);
+        } finally {
+            this.locked = false;
+            this.process();
+        }
+    }
+}
+
+const dbMutex = new Mutex();
+
+// Helper to write data (direct write, concurrency handled by Mutex)
+async function writeData(data) {
+    await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2));
+    broadcastChange();
 }
 
 // SSE Clients
@@ -213,6 +210,38 @@ function sanitizeUpdates(updates) {
 
 // API Routes
 
+// Get all lists (Config Mode)
+app.get('/api/lists', async (req, res) => {
+    try {
+        const data = await readData();
+        const lists = Object.keys(data);
+        res.json(lists);
+    } catch (error) {
+        console.error('Error getting lists:', error);
+        res.status(500).json({ error: 'Failed to retrieve lists' });
+    }
+});
+
+// Delete a specific list (Config Mode)
+app.delete('/api/lists/:listId', async (req, res) => {
+    await dbMutex.run(async () => {
+        try {
+            const { listId } = req.params;
+            const data = await readData();
+
+            if (data[listId]) {
+                delete data[listId];
+                await writeData(data);
+            }
+
+            res.json({ success: true });
+        } catch (error) {
+            console.error('Error deleting list:', error);
+            res.status(500).json({ error: 'Failed to delete list' });
+        }
+    });
+});
+
 // Get items for a specific list
 app.get('/api/items/:listId', async (req, res) => {
     try {
@@ -228,135 +257,163 @@ app.get('/api/items/:listId', async (req, res) => {
 
 // Add a single item
 app.post('/api/items/:listId', async (req, res) => {
-    try {
-        const { listId } = req.params;
-        const incoming = req.body;
+    await dbMutex.run(async () => {
+        try {
+            const { listId } = req.params;
+            const incoming = req.body;
 
-        // Build a normalized item for validation (don't trust client-provided id)
-        const candidate = {
-            text: incoming && incoming.text,
-            amount: incoming && incoming.amount,
-            completed: !!(incoming && incoming.completed),
-            addedBy: incoming && incoming.addedBy ? String(incoming.addedBy) : 'Guest'
-        };
+            // Build a normalized item for validation (don't trust client-provided id)
+            const candidate = {
+                text: incoming && incoming.text,
+                amount: incoming && incoming.amount,
+                completed: !!(incoming && incoming.completed),
+                addedBy: incoming && incoming.addedBy ? String(incoming.addedBy) : 'Guest'
+            };
 
-        const validation = validateItemData(candidate);
-        if (!validation.valid) {
-            return res.status(400).json({ error: validation.error });
+            const validation = validateItemData(candidate);
+            if (!validation.valid) {
+                return res.status(400).json({ error: validation.error });
+            }
+
+            const data = await readData();
+            if (!data[listId]) {
+                data[listId] = [];
+            }
+
+            // Ensure a unique server-generated id if none provided or if collision
+            let id = incoming && incoming.id ? String(incoming.id) : null;
+            if (!id || data[listId].some(it => it.id === id)) {
+                id = crypto.randomUUID();
+            }
+
+            const newItem = {
+                id,
+                text: String(candidate.text).trim(),
+                completed: !!candidate.completed,
+                amount: typeof candidate.amount === 'number' ? candidate.amount : 1,
+                addedBy: String(candidate.addedBy)
+            };
+
+            data[listId].push(newItem);
+            await writeData(data);
+
+            res.json({ success: true, item: newItem });
+        } catch (error) {
+            console.error('Error adding item:', error);
+            res.status(500).json({ error: 'Failed to add item' });
         }
-
-        const data = await readData();
-        if (!data[listId]) {
-            data[listId] = [];
-        }
-
-        // Ensure a unique server-generated id if none provided or if collision
-        let id = incoming && incoming.id ? String(incoming.id) : null;
-        if (!id || data[listId].some(it => it.id === id)) {
-            id = crypto.randomUUID();
-        }
-
-        const newItem = {
-            id,
-            text: String(candidate.text).trim(),
-            completed: !!candidate.completed,
-            amount: typeof candidate.amount === 'number' ? candidate.amount : 1,
-            addedBy: String(candidate.addedBy)
-        };
-
-        data[listId].push(newItem);
-        await writeData(data);
-
-        res.json({ success: true, item: newItem });
-    } catch (error) {
-        console.error('Error adding item:', error);
-        res.status(500).json({ error: 'Failed to add item' });
-    }
+    });
 });
 
 // Update a single item
 app.patch('/api/items/:listId/:itemId', async (req, res) => {
-    try {
-        const { listId, itemId } = req.params;
-        const updates = req.body;
+    await dbMutex.run(async () => {
+        try {
+            const { listId, itemId } = req.params;
+            const updates = req.body;
 
-        const data = await readData();
-        if (!data[listId]) {
-            return res.status(404).json({ error: 'List not found' });
-        }
-
-        // Use String() comparison to handle legacy number IDs
-        const itemIndex = data[listId].findIndex(item => String(item.id) === itemId);
-        if (itemIndex === -1) {
-            return res.status(404).json({ error: 'Item not found' });
-        }
-
-        // Sanitize and apply updates
-        const sanitizedUpdates = sanitizeUpdates(updates);
-        // Validate partial updates
-        if (sanitizedUpdates.text !== undefined) {
-            if (typeof sanitizedUpdates.text !== 'string' || sanitizedUpdates.text.trim() === '' || sanitizedUpdates.text.length > 128) {
-                return res.status(400).json({ error: 'Invalid text for update' });
+            const data = await readData();
+            if (!data[listId]) {
+                return res.status(404).json({ error: 'List not found' });
             }
-            sanitizedUpdates.text = sanitizedUpdates.text.trim();
-        }
 
-        if (sanitizedUpdates.amount !== undefined) {
-            if (typeof sanitizedUpdates.amount !== 'number' || sanitizedUpdates.amount < 1) {
-                return res.status(400).json({ error: 'Invalid amount for update' });
+            // Use String() comparison to handle legacy number IDs
+            const itemIndex = data[listId].findIndex(item => String(item.id) === itemId);
+            if (itemIndex === -1) {
+                return res.status(404).json({ error: 'Item not found' });
             }
+
+            // Sanitize and apply updates
+            const sanitizedUpdates = sanitizeUpdates(updates);
+            // Validate partial updates
+            if (sanitizedUpdates.text !== undefined) {
+                if (typeof sanitizedUpdates.text !== 'string' || sanitizedUpdates.text.trim() === '' || sanitizedUpdates.text.length > 128) {
+                    return res.status(400).json({ error: 'Invalid text for update' });
+                }
+                sanitizedUpdates.text = sanitizedUpdates.text.trim();
+            }
+
+            if (sanitizedUpdates.amount !== undefined) {
+                if (typeof sanitizedUpdates.amount !== 'number' || sanitizedUpdates.amount < 1) {
+                    return res.status(400).json({ error: 'Invalid amount for update' });
+                }
+            }
+
+            data[listId][itemIndex] = { ...data[listId][itemIndex], ...sanitizedUpdates };
+
+            await writeData(data);
+
+            res.json({ success: true, item: data[listId][itemIndex] });
+        } catch (error) {
+            console.error('Error updating item:', error);
+            res.status(500).json({ error: 'Failed to update item' });
         }
+    });
+});
 
-        data[listId][itemIndex] = { ...data[listId][itemIndex], ...sanitizedUpdates };
+// Delete all items in a list (Clear List)
+app.delete('/api/items/:listId', async (req, res) => {
+    await dbMutex.run(async () => {
+        try {
+            const { listId } = req.params;
+            const data = await readData();
 
-        await writeData(data);
+            if (data[listId]) {
+                data[listId] = [];
+                await writeData(data);
+            }
 
-        res.json({ success: true, item: data[listId][itemIndex] });
-    } catch (error) {
-        console.error('Error updating item:', error);
-        res.status(500).json({ error: 'Failed to update item' });
-    }
+            res.json({ success: true });
+        } catch (error) {
+            console.error('Error clearing list:', error);
+            res.status(500).json({ error: 'Failed to clear list' });
+        }
+    });
 });
 
 // Delete all completed items (MUST BE BEFORE /:itemId)
 app.delete('/api/items/:listId/completed', async (req, res) => {
-    try {
-        const { listId } = req.params;
+    await dbMutex.run(async () => {
+        try {
+            const { listId } = req.params;
 
-        const data = await readData();
-        if (!data[listId]) {
-            return res.status(404).json({ error: 'List not found' });
+            const data = await readData();
+            if (!data[listId]) {
+                return res.status(404).json({ error: 'List not found' });
+            }
+
+            data[listId] = data[listId].filter(item => !item.completed);
+            await writeData(data);
+
+            res.json({ success: true });
+        } catch (error) {
+            console.error('Error deleting completed items:', error);
+            res.status(500).json({ error: 'Failed to delete completed items' });
         }
-
-        data[listId] = data[listId].filter(item => !item.completed);
-        await writeData(data);
-
-        res.json({ success: true });
-    } catch (error) {
-        console.error('Error deleting completed items:', error);
-        res.status(500).json({ error: 'Failed to delete completed items' });
-    }
+    });
 });
 
 // Delete a single item
 app.delete('/api/items/:listId/:itemId', async (req, res) => {
-    try {
-        const { listId, itemId } = req.params;
+    await dbMutex.run(async () => {
+        try {
+            const { listId, itemId } = req.params;
 
-        const data = await readData();
-        if (!data[listId]) {
-            return res.status(404).json({ error: 'List not found' });
+            const data = await readData();
+            if (!data[listId]) {
+                return res.status(404).json({ error: 'List not found' });
+            }
+
+            // Use String() comparison to handle legacy number IDs
+            data[listId] = data[listId].filter(item => String(item.id) !== itemId);
+            await writeData(data);
+
+            res.json({ success: true });
+        } catch (error) {
+            console.error('Error deleting item:', error);
+            res.status(500).json({ error: 'Failed to delete item' });
         }
-
-        // Use String() comparison to handle legacy number IDs
-        data[listId] = data[listId].filter(item => String(item.id) !== itemId);
-        await writeData(data);
-
-        res.json({ success: true });
-    } catch (error) {
-        console.error('Error deleting item:', error);
-        res.status(500).json({ error: 'Failed to delete item' });
-    }
+    });
 });
 
 // Serve index.html for root
