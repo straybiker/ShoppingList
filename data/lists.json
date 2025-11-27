@@ -1,1 +1,18 @@
-{}
+{
+  "default": [
+    {
+      "id": 1764237305364,
+      "text": "brood",
+      "completed": false,
+      "amount": 1,
+      "addedBy": "Guest"
+    },
+    {
+      "id": 1764237192751,
+      "text": "Local Test",
+      "completed": false,
+      "amount": 1,
+      "addedBy": "Guest"
+    }
+  ]
+}
