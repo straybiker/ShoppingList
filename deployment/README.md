@@ -37,10 +37,11 @@ This guide explains how to deploy the Shopping List application to a Proxmox LXC
         ```
 
 4.  **Access the App**:
-    - Open your browser and go to `http://<LXC_IP_ADDRESS>/`.
+    - Open your browser and go to `http://<LXC_IP_ADDRESS>:3000/`.
     - You should see the Shopping List app.
 
 ## Notes
 
-- The app is served by Nginx on port 80.
-- The files are located at `/var/www/html/shopping-list`.
+- The app runs as a Node.js service (`shopping-list`) on port 3000.
+- The application files are located at `/opt/shopping-list`.
+- Data is stored in `/opt/shopping-list/data`.

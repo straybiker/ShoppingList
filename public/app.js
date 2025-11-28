@@ -74,12 +74,14 @@ document.addEventListener('DOMContentLoaded', () => {
             if (response.ok) {
                 const lists = await response.json();
                 // Map lists to item structure for rendering
-                items = lists.map(name => ({
-                    id: name,
-                    text: name,
+                items = lists.map(list => ({
+                    id: list.name,
+                    text: list.name,
                     completed: false,
                     amount: null,
-                    addedBy: null
+                    addedBy: null,
+                    updatedAt: list.updatedAt,
+                    itemCount: list.itemCount
                 }));
                 renderItems();
             }
@@ -411,25 +413,35 @@ document.addEventListener('DOMContentLoaded', () => {
                     textSpan.textContent = item.text;
                 }
 
-                // Update author if changed (skip in config mode)
-                if (!isConfigMode) {
-                    const authorSpan = li.querySelector('.item-author');
-                    const shouldHaveAuthor = item.addedBy && item.addedBy !== 'Guest';
-                    if (shouldHaveAuthor) {
-                        if (!authorSpan) {
-                            // Insert author span if missing
-                            const textContentDiv = li.querySelector('.text-content');
-                            const newAuthorSpan = document.createElement('span');
-                            newAuthorSpan.className = 'item-author';
-                            newAuthorSpan.textContent = item.addedBy;
-                            textContentDiv.insertBefore(newAuthorSpan, textSpan);
-                        } else if (authorSpan.textContent !== item.addedBy) {
-                            authorSpan.textContent = item.addedBy;
-                        }
-                    } else if (authorSpan) {
-                        authorSpan.remove();
-                    }
+                // Handle Meta Text (Author in normal mode, Date in config mode)
+                const metaSpan = li.querySelector('.item-author');
+                // textSpan is already defined above
+                let metaText = null;
 
+                if (isConfigMode) {
+                    metaText = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'Never updated';
+                } else if (item.addedBy && item.addedBy !== 'Guest') {
+                    metaText = item.addedBy;
+                }
+
+                if (metaText) {
+                    if (!metaSpan) {
+                        const textContentDiv = li.querySelector('.text-content');
+                        const newMetaSpan = document.createElement('span');
+                        newMetaSpan.className = 'item-author';
+                        if (isConfigMode) newMetaSpan.style.textTransform = 'none';
+                        newMetaSpan.textContent = metaText;
+                        textContentDiv.insertBefore(newMetaSpan, textSpan);
+                    } else {
+                        if (metaSpan.textContent !== metaText) metaSpan.textContent = metaText;
+                        if (isConfigMode) metaSpan.style.textTransform = 'none';
+                        else metaSpan.style.textTransform = '';
+                    }
+                } else if (metaSpan) {
+                    metaSpan.remove();
+                }
+
+                if (!isConfigMode) {
                     // Update amount
                     const qtyDisplay = li.querySelector('.qty-display');
                     if (qtyDisplay && qtyDisplay.textContent !== String(item.amount || 1)) {
@@ -451,9 +463,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     <label for="item-${item.id}" class="checkbox-custom"></label>
                 `;
 
-                const authorHtml = (!isConfigMode && item.addedBy && item.addedBy !== 'Guest')
-                    ? `<span class="item-author">${escapeHtml(item.addedBy)}</span>`
-                    : '';
+                let metaHtml = '';
+                if (isConfigMode) {
+                    const dateStr = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'Never updated';
+                    metaHtml = `<span class="item-author" style="text-transform: none;">${escapeHtml(dateStr)}</span>`;
+                } else if (item.addedBy && item.addedBy !== 'Guest') {
+                    metaHtml = `<span class="item-author">${escapeHtml(item.addedBy)}</span>`;
+                }
 
                 const qtyHtml = isConfigMode ? `
                     <button class="qty-btn" data-action="open" aria-label="Open list ${escapeHtml(item.text)}" style="width: auto; padding: 0 8px;">
@@ -473,7 +489,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="item-content" data-action="${isConfigMode ? '' : 'toggle'}">
                         ${checkboxHtml}
                         <div class="text-content">
-                            ${authorHtml}
+                            ${metaHtml}
                             <span class="item-text">${escapeHtml(item.text)}</span>
                         </div>
                     </div>

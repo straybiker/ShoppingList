@@ -10,12 +10,19 @@ const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'lists.json');
 
+// Trust proxy (required for correct IP detection behind Nginx/Docker/LXC proxies)
+app.set('trust proxy', 1);
+
 // Simple in-memory rate limiter
 const rateLimit = new Map();
-const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
-const MAX_REQUESTS = 100;
+const RATE_LIMIT_WINDOW = parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000; // 15 minutes default
+const MAX_REQUESTS = parseInt(process.env.RATE_LIMIT_MAX) || 1000; // 1000 requests default
 
 function rateLimiter(req, res, next) {
+    // Use IP as the identifier. 
+    // Note: In a real multi-user app with auth, you'd use the user ID.
+    // Here, we stick to IP to prevent abuse, but we've increased the limit
+    // to accommodate multiple users behind the same NAT/Proxy.
     const ip = req.ip;
     const now = Date.now();
 
@@ -34,6 +41,7 @@ function rateLimiter(req, res, next) {
     }
 
     if (userData.count >= MAX_REQUESTS) {
+        console.warn(`Rate limit exceeded for IP: ${ip}`);
         return res.status(429).json({ error: 'Too many requests, please try again later.' });
     }
 
@@ -208,13 +216,41 @@ function sanitizeUpdates(updates) {
         }, {});
 }
 
+// Helper to get list data safely (handles migration from array to object)
+function getList(data, listId) {
+    if (!data[listId]) return null;
+    if (Array.isArray(data[listId])) {
+        // Convert legacy array to object structure
+        data[listId] = {
+            items: data[listId],
+            updatedAt: null // Unknown for legacy lists
+        };
+    }
+    return data[listId];
+}
+
+// Helper to touch a list (update timestamp)
+function touchList(data, listId) {
+    const list = getList(data, listId);
+    if (list) {
+        list.updatedAt = Date.now();
+    }
+}
+
 // API Routes
 
 // Get all lists (Config Mode)
 app.get('/api/lists', async (req, res) => {
     try {
         const data = await readData();
-        const lists = Object.keys(data);
+        const lists = Object.entries(data).map(([name, value]) => {
+            const isLegacy = Array.isArray(value);
+            return {
+                name,
+                updatedAt: isLegacy ? null : value.updatedAt,
+                itemCount: isLegacy ? value.length : value.items.length
+            };
+        });
         res.json(lists);
     } catch (error) {
         console.error('Error getting lists:', error);
@@ -247,7 +283,8 @@ app.get('/api/items/:listId', async (req, res) => {
     try {
         const { listId } = req.params;
         const data = await readData();
-        const items = data[listId] || [];
+        const list = getList(data, listId);
+        const items = list ? list.items : [];
         res.json(items);
     } catch (error) {
         console.error('Error getting items:', error);
@@ -262,7 +299,7 @@ app.post('/api/items/:listId', async (req, res) => {
             const { listId } = req.params;
             const incoming = req.body;
 
-            // Build a normalized item for validation (don't trust client-provided id)
+            // Build a normalized item for validation
             const candidate = {
                 text: incoming && incoming.text,
                 amount: incoming && incoming.amount,
@@ -276,13 +313,20 @@ app.post('/api/items/:listId', async (req, res) => {
             }
 
             const data = await readData();
+
+            // Initialize list if missing
             if (!data[listId]) {
-                data[listId] = [];
+                data[listId] = { items: [], updatedAt: Date.now() };
+            } else {
+                // Ensure structure is migrated
+                getList(data, listId);
             }
 
-            // Ensure a unique server-generated id if none provided or if collision
+            const list = data[listId];
+
+            // Ensure a unique server-generated id
             let id = incoming && incoming.id ? String(incoming.id) : null;
-            if (!id || data[listId].some(it => it.id === id)) {
+            if (!id || list.items.some(it => it.id === id)) {
                 id = crypto.randomUUID();
             }
 
@@ -294,7 +338,9 @@ app.post('/api/items/:listId', async (req, res) => {
                 addedBy: String(candidate.addedBy)
             };
 
-            data[listId].push(newItem);
+            list.items.push(newItem);
+            list.updatedAt = Date.now();
+
             await writeData(data);
 
             res.json({ success: true, item: newItem });
@@ -313,19 +359,19 @@ app.patch('/api/items/:listId/:itemId', async (req, res) => {
             const updates = req.body;
 
             const data = await readData();
-            if (!data[listId]) {
+            const list = getList(data, listId);
+
+            if (!list) {
                 return res.status(404).json({ error: 'List not found' });
             }
 
-            // Use String() comparison to handle legacy number IDs
-            const itemIndex = data[listId].findIndex(item => String(item.id) === itemId);
+            const itemIndex = list.items.findIndex(item => String(item.id) === itemId);
             if (itemIndex === -1) {
                 return res.status(404).json({ error: 'Item not found' });
             }
 
             // Sanitize and apply updates
             const sanitizedUpdates = sanitizeUpdates(updates);
-            // Validate partial updates
             if (sanitizedUpdates.text !== undefined) {
                 if (typeof sanitizedUpdates.text !== 'string' || sanitizedUpdates.text.trim() === '' || sanitizedUpdates.text.length > 128) {
                     return res.status(400).json({ error: 'Invalid text for update' });
@@ -339,11 +385,12 @@ app.patch('/api/items/:listId/:itemId', async (req, res) => {
                 }
             }
 
-            data[listId][itemIndex] = { ...data[listId][itemIndex], ...sanitizedUpdates };
+            list.items[itemIndex] = { ...list.items[itemIndex], ...sanitizedUpdates };
+            list.updatedAt = Date.now();
 
             await writeData(data);
 
-            res.json({ success: true, item: data[listId][itemIndex] });
+            res.json({ success: true, item: list.items[itemIndex] });
         } catch (error) {
             console.error('Error updating item:', error);
             res.status(500).json({ error: 'Failed to update item' });
@@ -357,9 +404,11 @@ app.delete('/api/items/:listId', async (req, res) => {
         try {
             const { listId } = req.params;
             const data = await readData();
+            const list = getList(data, listId);
 
-            if (data[listId]) {
-                data[listId] = [];
+            if (list) {
+                list.items = [];
+                list.updatedAt = Date.now();
                 await writeData(data);
             }
 
@@ -371,18 +420,21 @@ app.delete('/api/items/:listId', async (req, res) => {
     });
 });
 
-// Delete all completed items (MUST BE BEFORE /:itemId)
+// Delete all completed items
 app.delete('/api/items/:listId/completed', async (req, res) => {
     await dbMutex.run(async () => {
         try {
             const { listId } = req.params;
-
             const data = await readData();
-            if (!data[listId]) {
+            const list = getList(data, listId);
+
+            if (!list) {
                 return res.status(404).json({ error: 'List not found' });
             }
 
-            data[listId] = data[listId].filter(item => !item.completed);
+            list.items = list.items.filter(item => !item.completed);
+            list.updatedAt = Date.now();
+
             await writeData(data);
 
             res.json({ success: true });
@@ -398,14 +450,16 @@ app.delete('/api/items/:listId/:itemId', async (req, res) => {
     await dbMutex.run(async () => {
         try {
             const { listId, itemId } = req.params;
-
             const data = await readData();
-            if (!data[listId]) {
+            const list = getList(data, listId);
+
+            if (!list) {
                 return res.status(404).json({ error: 'List not found' });
             }
 
-            // Use String() comparison to handle legacy number IDs
-            data[listId] = data[listId].filter(item => String(item.id) !== itemId);
+            list.items = list.items.filter(item => String(item.id) !== itemId);
+            list.updatedAt = Date.now();
+
             await writeData(data);
 
             res.json({ success: true });

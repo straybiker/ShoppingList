@@ -7,8 +7,11 @@ A modern, real-time shopping list application built with Node.js, Express, and v
 - **Real-time Synchronization**: Updates appear instantly across all connected devices using Server-Sent Events (SSE).
 - **Backend Storage**: Lists are saved persistently on the server (JSON file storage), allowing access from any device.
 - **Multi-User & Multi-List**: Create separate lists and track who added items via URL parameters.
-- **Slash Commands**: Use `/clear-cache` to instantly delete all items in the current list.
+- **Slash Commands**:
+  - `/clear-cache`: Instantly delete all items in the current list.
+  - `/config`: Enter configuration mode to manage and delete existing lists.
 - **Smart UI**:
+  - **Mobile-First Layout**: Fixed header and input box with an endless scrolling list for easy navigation.
   - Dark premium theme with glassmorphism effects.
   - Responsive design for mobile and desktop.
   - Accessible custom checkboxes.
