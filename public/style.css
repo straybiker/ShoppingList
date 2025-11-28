@@ -29,11 +29,11 @@ body {
     font-family: var(--font-family);
     background-color: var(--bg-color);
     color: var(--text-primary);
-    min-height: 100vh;
+    height: 100vh;
     display: flex;
     justify-content: center;
     align-items: center;
-    overflow-x: hidden;
+    overflow: hidden;
 }
 
 /* Dynamic Background */
@@ -74,8 +74,11 @@ body {
 .app-container {
     width: 100%;
     max-width: 480px;
-    margin: 20px;
-    padding: 32px;
+    height: 100%;
+    margin: 0 auto;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
 }
 
 /* Header */
@@ -158,29 +161,35 @@ input[type="text"]::placeholder {
 }
 
 /* List Area */
+.list-area {
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
+    padding-right: 4px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.2) transparent;
+    display: flex;
+    flex-direction: column;
+}
+
+.list-area::-webkit-scrollbar {
+    width: 6px;
+}
+
+.list-area::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.list-area::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.2);
+    border-radius: 10px;
+}
+
 .shopping-list {
     list-style: none;
     display: flex;
     flex-direction: column;
     gap: 12px;
-    max-height: 60vh;
-    overflow-y: auto;
-    padding-right: 4px;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(148, 163, 184, 0.2) transparent;
-}
-
-.shopping-list::-webkit-scrollbar {
-    width: 6px;
-}
-
-.shopping-list::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.shopping-list::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.2);
-    border-radius: 10px;
 }
 
 .list-item {
