@@ -4,11 +4,28 @@ document.addEventListener('DOMContentLoaded', () => {
     const addBtn = document.getElementById('add-btn');
     const shoppingList = document.getElementById('shopping-list');
     const emptyState = document.getElementById('empty-state');
+    const listControls = document.getElementById('list-controls');
     const deleteCompletedBtn = document.getElementById('delete-completed-btn');
     const sortAzBtn = document.getElementById('sort-az-btn');
     const sortZaBtn = document.getElementById('sort-za-btn');
 
-    // URL Params
+    // Online/Offline Status Handling
+    window.addEventListener('online', () => {
+        showToast('You are back online', 'success');
+        document.body.classList.remove('offline');
+    });
+
+    window.addEventListener('offline', () => {
+        showToast('You are offline. Changes may not save.', 'error');
+        document.body.classList.add('offline');
+    });
+
+    // Initial check
+    if (!navigator.onLine) {
+        document.body.classList.add('offline');
+    }
+
+    // Check for saved user/list in URL
     const urlParams = new URLSearchParams(window.location.search);
     const listId = urlParams.get('list') || 'default';
     const userName = urlParams.get('user') || 'Guest';

@@ -66,22 +66,33 @@ http://localhost:3000/?list=family&user=Sarah
 ### Docker Deployment
 
 #### Using Docker Compose (Recommended)
+This method automatically handles the build and sets up data persistence.
 
 ```bash
-# Build and start the container
+# Build and start the container in the background
 docker compose up -d --build
 
 # Access the app at http://localhost:8081
 ```
 
 #### Using Docker CLI
+If you prefer running the container manually:
 
 ```bash
-# Build the image
+# 1. Build the image
 docker build -t shopping-list .
 
-# Run the container (mapping host port 8081 to container port 3000)
-docker run -d -p 8081:3000 --name shopping-list-app shopping-list
+# 2. Create a volume for data persistence
+docker volume create shopping_list_data
+
+# 3. Run the container
+# - Maps host port 8081 to container port 3000
+# - Mounts the volume to /usr/src/app/data
+docker run -d \
+  -p 8081:3000 \
+  -v shopping_list_data:/usr/src/app/data \
+  --name shopping-list-app \
+  shopping-list
 ```
 
 ## Technologies
