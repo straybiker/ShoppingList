@@ -1,3 +1,7 @@
+window.onerror = function (message, source, lineno, colno, error) {
+    console.error('Global error:', message, 'at', source, ':', lineno, ':', colno);
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     // DOM Elements
     const itemInput = document.getElementById('item-input');
@@ -8,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const deleteCompletedBtn = document.getElementById('delete-completed-btn');
     const sortAzBtn = document.getElementById('sort-az-btn');
     const sortZaBtn = document.getElementById('sort-za-btn');
+    const profileBtn = document.getElementById('profile-btn');
 
     // Online/Offline Status Handling
     window.addEventListener('online', () => {
@@ -28,7 +33,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // Check for saved user/list in URL
     const urlParams = new URLSearchParams(window.location.search);
     const listId = urlParams.get('list') || 'default';
-    const userName = urlParams.get('user') || 'Guest';
+
+    // User Identification
+    const storedUsername = localStorage.getItem('username');
+    const storedDisplayName = localStorage.getItem('displayName');
+
+    if (!storedUsername) {
+        window.location.href = '/profile.html';
+        return;
+    }
+
+    const userName = storedUsername;
+    const displayName = storedDisplayName || userName;
 
     // State
     const API_URL = '/api/items';
@@ -151,7 +167,8 @@ document.addEventListener('DOMContentLoaded', () => {
             text: text,
             completed: false,
             amount: 1,
-            addedBy: userName
+            addedBy: userName,
+            authorName: displayName
         };
 
         isUpdating = true;
@@ -437,6 +454,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (isConfigMode) {
                     metaText = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'Never updated';
+                } else if (item.authorName) {
+                    metaText = item.authorName;
                 } else if (item.addedBy && item.addedBy !== 'Guest') {
                     metaText = item.addedBy;
                 }
@@ -484,6 +503,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (isConfigMode) {
                     const dateStr = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'Never updated';
                     metaHtml = `<span class="item-author" style="text-transform: none;">${escapeHtml(dateStr)}</span>`;
+                } else if (item.authorName) {
+                    metaHtml = `<span class="item-author">${escapeHtml(item.authorName)}</span>`;
                 } else if (item.addedBy && item.addedBy !== 'Guest') {
                     metaHtml = `<span class="item-author">${escapeHtml(item.addedBy)}</span>`;
                 }
@@ -645,6 +666,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (sortAzBtn) sortAzBtn.addEventListener('click', () => sortItems('asc'));
     if (sortZaBtn) sortZaBtn.addEventListener('click', () => sortItems('desc'));
+
+    if (profileBtn) {
+        profileBtn.addEventListener('click', () => {
+            window.location.href = '/profile.html';
+        });
+    }
 
     if (itemInput) {
         itemInput.addEventListener('keydown', (e) => {

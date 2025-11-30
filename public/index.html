@@ -40,15 +40,25 @@
     <div class="background-gradient"></div>
 
     <main class="app-container">
-
         <header class="app-header">
-            <h1>Shopping List</h1>
-            <p class="subtitle">Stay organized, buy smart.</p>
+            <div class="header-content">
+                <div class="title-container">
+                    <h1>Shopping List</h1>
+                    <p class="subtitle">Stay organized, buy smart.</p>
+                </div>
+                <button id="profile-btn" class="icon-btn" aria-label="User Profile">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                </button>
+            </div>
         </header>
 
         <section class="input-area">
-            <div class="input-group">
-                <input type="text" id="item-input" placeholder="Add a new item..." autocomplete="off" maxlength="128">
+            <div class="input-wrapper">
+                <input type="text" id="item-input" placeholder="Add a new item..." autocomplete="off">
                 <button id="add-btn" aria-label="Add item">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"

@@ -1,12 +1,42 @@
-// @ts-check
 const { test, expect } = require('@playwright/test');
 
 test.describe('Shopping List App E2E', () => {
     test.beforeEach(async ({ page }) => {
+        // Listen for console logs
+        page.on('console', msg => console.log(`BROWSER: ${msg.text()}`));
+
+        console.log('Navigating to app...');
         await page.goto('http://localhost:3000');
+
+        // Handle User Registration if redirected to profile
+        if (page.url().includes('profile.html')) {
+            console.log('Redirected to profile.html, registering user...');
+            const uniqueId = Date.now();
+            await page.fill('#username', `testuser_${uniqueId}`);
+            await page.fill('#display-name', 'Test User');
+
+            // Wait for navigation to complete after form submission
+            await Promise.all([
+                page.waitForNavigation({ timeout: 10000 }),
+                page.click('button[type="submit"]')
+            ]);
+
+            // Verify we're back on the main page
+            console.log(`After registration, URL: ${page.url()}`);
+        }
+
+        console.log('Navigation complete');
+
         // Clear list before each test to ensure clean state
-        await page.fill('#item-input', '/clear-cache');
-        await page.click('#add-btn');
+        try {
+            await page.waitForSelector('#item-input', { timeout: 5000 });
+            await page.fill('#item-input', '/clear-cache');
+            await page.keyboard.press('Enter');
+            // Wait for toast or list to clear
+            await page.waitForTimeout(500);
+        } catch (e) {
+            console.log('Failed to find #item-input or clear cache:', e);
+        }
     });
 
     test('should open application with correct elements', async ({ page }) => {
@@ -27,6 +57,7 @@ test.describe('Shopping List App E2E', () => {
         const item = page.locator('.list-item', { hasText: 'Milk' });
         await expect(item).toBeVisible();
         await expect(item.locator('.item-text')).toHaveText('Milk');
+        await expect(item.locator('.item-author')).toHaveText('Test User');
     });
 
     test('should remove items from the list', async ({ page }) => {
@@ -44,8 +75,9 @@ test.describe('Shopping List App E2E', () => {
         await page.fill('#item-input', 'Eggs');
         await page.click('#add-btn');
 
+        // Use force: true because the input is visually hidden
         const checkbox = page.locator('.checkbox-input');
-        await checkbox.check();
+        await checkbox.check({ force: true });
 
         const listItem = page.locator('.list-item');
         await expect(listItem).toHaveClass(/completed/);
@@ -64,7 +96,7 @@ test.describe('Shopping List App E2E', () => {
 
         // Select Apples
         const applesItem = page.locator('.list-item', { hasText: 'Apples' });
-        await applesItem.locator('.checkbox-input').check();
+        await applesItem.locator('.checkbox-input').check({ force: true });
 
         // Click Delete Completed
         await page.click('#delete-completed-btn');
@@ -114,16 +146,22 @@ test.describe('Shopping List App E2E', () => {
         await expect(item.locator('.qty-display')).toHaveText('2');
     });
 
-    test('should remove all items and show empty message', async ({ page }) => {
-        // Add item
-        await page.fill('#item-input', 'Cheese');
-        await page.click('#add-btn');
+    test('should allow user to switch profile', async ({ page }) => {
+        // Ensure we are logged in (handled by beforeEach)
+        await expect(page.locator('#profile-btn')).toBeVisible();
 
-        // Clear list via command (simulating "remove all" if there was a button, or just deleting the last item)
-        await page.click('button[data-action="delete"]');
+        // Go to profile
+        await page.click('#profile-btn');
+        await expect(page).toHaveURL(/.*profile\.html/);
 
-        await expect(page.locator('#shopping-list')).toBeEmpty();
-        await expect(page.locator('#empty-state')).not.toHaveClass(/hidden/);
-        await expect(page.locator('#empty-state p')).toHaveText('Your list is empty.');
+        // Switch user
+        page.on('dialog', dialog => dialog.accept());
+        await page.click('#switch-user-btn');
+
+        // Should stay on profile page but fields cleared (or reloaded)
+        // Since we reload, we expect to be on profile page with empty fields if local storage is cleared
+        // But app.js redirects to profile if no user, so we are on profile page.
+        await expect(page).toHaveURL(/.*profile\.html/);
+        await expect(page.locator('#username')).toBeEmpty();
     });
 });

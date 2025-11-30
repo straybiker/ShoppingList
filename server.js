@@ -9,6 +9,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'lists.json');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
 // Trust proxy (required for correct IP detection behind Nginx/Docker/LXC proxies)
 app.set('trust proxy', 1);
@@ -76,6 +77,23 @@ async function readData() {
         console.error('Error reading data file:', err);
         return {};
     }
+}
+
+async function readUsers() {
+    try {
+        const data = await fs.readFile(USERS_FILE, 'utf8');
+        return JSON.parse(data);
+    } catch (err) {
+        if (err.code === 'ENOENT') {
+            return {};
+        }
+        console.error('Error reading users file:', err);
+        return {};
+    }
+}
+
+async function writeUsers(users) {
+    await fs.writeFile(USERS_FILE, JSON.stringify(users, null, 2));
 }
 
 // Mutex for atomic operations
@@ -239,6 +257,46 @@ function touchList(data, listId) {
 
 // API Routes
 
+// Register/Update User
+app.post('/api/users/register', async (req, res) => {
+    await dbMutex.run(async () => {
+        try {
+            const { username, displayName } = req.body;
+
+            if (!username || typeof username !== 'string' || username.trim() === '') {
+                return res.status(400).json({ error: 'Username is required' });
+            }
+
+            const safeUsername = username.trim().toLowerCase();
+            const safeDisplayName = displayName ? displayName.trim() : safeUsername;
+
+            const users = await readUsers();
+
+            // Check if username exists
+            if (users[safeUsername]) {
+                // If it exists, we only allow updating if it's the same "session" or we just treat it as a login/update
+                // For this simple app, we'll allow updating the display name for the existing username
+                users[safeUsername].displayName = safeDisplayName;
+                users[safeUsername].lastSeen = Date.now();
+            } else {
+                // Register new user
+                users[safeUsername] = {
+                    username: safeUsername,
+                    displayName: safeDisplayName,
+                    createdAt: Date.now(),
+                    lastSeen: Date.now()
+                };
+            }
+
+            await writeUsers(users);
+            res.json({ success: true, user: users[safeUsername] });
+        } catch (error) {
+            console.error('Error registering user:', error);
+            res.status(500).json({ error: 'Failed to register user' });
+        }
+    });
+});
+
 // Get all lists (Config Mode)
 app.get('/api/lists', async (req, res) => {
     try {
@@ -304,7 +362,8 @@ app.post('/api/items/:listId', async (req, res) => {
                 text: incoming && incoming.text,
                 amount: incoming && incoming.amount,
                 completed: !!(incoming && incoming.completed),
-                addedBy: incoming && incoming.addedBy ? String(incoming.addedBy) : 'Guest'
+                addedBy: incoming && incoming.addedBy ? String(incoming.addedBy) : 'Guest',
+                authorName: incoming && incoming.authorName ? String(incoming.authorName) : (incoming && incoming.addedBy ? String(incoming.addedBy) : 'Guest')
             };
 
             const validation = validateItemData(candidate);
@@ -335,7 +394,8 @@ app.post('/api/items/:listId', async (req, res) => {
                 text: String(candidate.text).trim(),
                 completed: !!candidate.completed,
                 amount: typeof candidate.amount === 'number' ? candidate.amount : 1,
-                addedBy: String(candidate.addedBy)
+                addedBy: String(candidate.addedBy),
+                authorName: String(candidate.authorName)
             };
 
             list.items.push(newItem);
