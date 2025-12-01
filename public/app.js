@@ -118,7 +118,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadLists() {
         try {
-            const response = await fetch('/api/lists');
+            const response = await fetch(`/api/lists?t=${Date.now()}`);
             if (response.ok) {
                 const lists = await response.json();
                 // Map lists to item structure for rendering
@@ -141,7 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadUsers() {
         try {
-            const response = await fetch('/api/users');
+            const response = await fetch(`/api/users?t=${Date.now()}`);
             if (response.ok) {
                 const users = await response.json();
                 // Map users to item structure for rendering
@@ -433,22 +433,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function deleteUser(username) {
-        if (confirm(`Are you sure you want to delete user "${username}"?`)) {
-            try {
-                const response = await fetch(`/api/users/${username}`, {
-                    method: 'DELETE'
-                });
+        const user = items.find(i => i.id === username);
+        const displayName = user ? user.text : username;
 
-                if (response.ok) {
-                    showToast(`User "${username}" deleted successfully`, 'success');
-                    await loadUsers();
-                } else {
-                    showError('Failed to delete user');
-                }
-            } catch (error) {
-                console.error('Error deleting user:', error);
-                showError('Error deleting user');
+        try {
+            const response = await fetch(`/api/users/${username}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                showToast(`User "${displayName}" deleted successfully`, 'success');
+                await loadUsers();
+            } else {
+                showError('Failed to delete user');
             }
+        } catch (error) {
+            console.error('Error deleting user:', error);
+            showError('Error deleting user');
         }
     }
 

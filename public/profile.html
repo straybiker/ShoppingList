@@ -152,14 +152,12 @@
             if (savedDisplayName) displayNameInput.value = savedDisplayName;
 
             switchUserBtn.addEventListener('click', () => {
-                if (confirm('Are you sure you want to switch users? This will clear your current session.')) {
-                    localStorage.removeItem('username');
-                    localStorage.removeItem('displayName');
-                    usernameInput.value = '';
-                    displayNameInput.value = '';
-                    usernameInput.readOnly = false;
-                    window.location.reload();
-                }
+                localStorage.removeItem('username');
+                localStorage.removeItem('displayName');
+                usernameInput.value = '';
+                displayNameInput.value = '';
+                usernameInput.readOnly = false;
+                window.location.reload();
             });
 
             form.addEventListener('submit', async (e) => {
