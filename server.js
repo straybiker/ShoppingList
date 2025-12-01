@@ -344,6 +344,7 @@ app.get('/api/lists', async (req, res) => {
             const isLegacy = Array.isArray(value);
             return {
                 name,
+                displayName: isLegacy ? name : (value.displayName || name),
                 updatedAt: isLegacy ? null : value.updatedAt,
                 itemCount: isLegacy ? value.length : value.items.length
             };
@@ -352,6 +353,63 @@ app.get('/api/lists', async (req, res) => {
     } catch (error) {
         console.error('Error getting lists:', error);
         res.status(500).json({ error: 'Failed to retrieve lists' });
+    }
+});
+
+// Create a new list with a display name (Config Mode)
+app.post('/api/lists', async (req, res) => {
+    await dbMutex.run(async () => {
+        try {
+            const { displayName } = req.body;
+
+            if (!displayName || typeof displayName !== 'string' || displayName.trim() === '') {
+                return res.status(400).json({ error: 'Display name is required' });
+            }
+
+            const safeName = displayName.trim();
+
+            // Generate a unique ID for the list
+            const listId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+            const data = await readData();
+            data[listId] = {
+                items: [],
+                displayName: safeName,
+                updatedAt: Date.now()
+            };
+
+            await writeData(data);
+            res.json({ success: true, listId, displayName: safeName });
+        } catch (error) {
+            console.error('Error creating list:', error);
+            res.status(500).json({ error: 'Failed to create list' });
+        }
+    });
+});
+
+// Get a specific list details
+app.get('/api/lists/:listId', async (req, res) => {
+    try {
+        const { listId } = req.params;
+        const data = await readData();
+        const list = getList(data, listId);
+
+        if (!list) {
+            return res.status(404).json({ error: 'List not found' });
+        }
+
+        const isLegacy = Array.isArray(data[listId]); // Check raw data for legacy format
+        const listDetails = {
+            name: listId,
+            displayName: isLegacy ? listId : (list.displayName || listId),
+            updatedAt: list.updatedAt,
+            itemCount: list.items.length
+        };
+
+        res.json(listDetails);
+    } catch (error) {
+        console.error('Error getting list details:', error);
+        res.status(500).json({ error: 'Failed to retrieve list details' });
     }
 });
 
@@ -380,6 +438,11 @@ app.get('/api/items/:listId', async (req, res) => {
     try {
         const { listId } = req.params;
         const data = await readData();
+
+        if (!data[listId]) {
+            return res.status(404).json({ error: 'List not found' });
+        }
+
         const list = getList(data, listId);
         const items = list ? list.items : [];
         res.json(items);
@@ -412,15 +475,16 @@ app.post('/api/items/:listId', async (req, res) => {
 
             const data = await readData();
 
-            // Initialize list if missing
+            // Initialize list if missing (recreation logic)
             if (!data[listId]) {
-                data[listId] = { items: [], updatedAt: Date.now() };
-            } else {
-                // Ensure structure is migrated
-                getList(data, listId);
+                data[listId] = {
+                    items: [],
+                    displayName: incoming.displayName || listId,
+                    updatedAt: Date.now()
+                };
             }
 
-            const list = data[listId];
+            const list = getList(data, listId);
 
             // Ensure a unique server-generated id
             let id = incoming && incoming.id ? String(incoming.id) : null;

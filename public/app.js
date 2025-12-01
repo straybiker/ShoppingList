@@ -67,6 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isUpdating = false;
     let configMode = null; // 'lists' | 'users' | null
     let previousListId = null; // Store previous list ID for return
+    let previousListName = null; // Store previous list display name
     let eventSource = null;
     let reconnectAttempts = 0;
     const MAX_RECONNECT_ATTEMPTS = 5;
@@ -123,7 +124,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Map lists to item structure for rendering
                 items = lists.map(list => ({
                     id: list.name,
-                    text: list.name,
+                    text: list.displayName || list.name,
                     completed: false,
                     amount: null,
                     addedBy: null,
@@ -172,15 +173,41 @@ document.addEventListener('DOMContentLoaded', () => {
                 itemInput.value = '';
                 return;
             } else if (text === '/config-lists') {
+                // Fetch current list name before switching
+                try {
+                    const response = await fetch(`/api/lists/${listId}`);
+                    if (response.ok) {
+                        const listData = await response.json();
+                        previousListName = listData.displayName;
+                    } else {
+                        previousListName = listId;
+                    }
+                } catch (e) {
+                    previousListName = listId;
+                }
+
                 configMode = 'lists';
                 previousListId = listId; // Store current list
                 itemInput.value = '';
-                itemInput.placeholder = 'Enter command...'; // Update placeholder
+                itemInput.placeholder = 'Add new list...'; // Update placeholder
                 document.querySelector('.app-header h1').textContent = 'Configuration';
                 document.querySelector('.subtitle').textContent = 'Manage Lists';
                 await loadLists();
                 return;
             } else if (text === '/config-users') {
+                // Fetch current list name before switching
+                try {
+                    const response = await fetch(`/api/lists/${listId}`);
+                    if (response.ok) {
+                        const listData = await response.json();
+                        previousListName = listData.displayName;
+                    } else {
+                        previousListName = listId;
+                    }
+                } catch (e) {
+                    previousListName = listId;
+                }
+
                 configMode = 'users';
                 previousListId = listId; // Store current list
                 itemInput.value = '';
@@ -193,6 +220,32 @@ document.addEventListener('DOMContentLoaded', () => {
                 showError('Unknown command. Supported: /clear-cache, /config-lists, /config-users');
                 return;
             }
+        }
+
+        // Handle list creation in config mode
+        if (configMode === 'lists') {
+            try {
+                const response = await fetch('/api/lists', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ displayName: text })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    showToast(`List "${result.displayName}" created successfully`, 'success');
+                    await loadLists();
+                    itemInput.value = '';
+                    itemInput.focus();
+                } else {
+                    const errText = await response.text();
+                    showError('Failed to create list: ' + errText);
+                }
+            } catch (error) {
+                console.error('Error creating list:', error);
+                showError('Error creating list');
+            }
+            return;
         }
 
         // Check if item with same name already exists (case-insensitive)
@@ -222,7 +275,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`${API_URL}/${listId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newItem)
+                body: JSON.stringify({
+                    ...newItem,
+                    displayName: localStorage.getItem('currentListName') // Send current list name
+                })
             });
 
             if (response.ok) {
@@ -356,12 +412,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function deleteList(id) {
         try {
+            // Get list name for toast
+            const list = items.find(i => i.id === id);
+            const listName = list ? list.text : id;
+
             const response = await fetch(`/api/lists/${id}`, {
                 method: 'DELETE'
             });
 
             if (response.ok) {
-                showToast(`List "${id}" deleted successfully`, 'success');
+                showToast(`List "${listName}" deleted successfully`, 'success');
                 await loadLists();
             } else {
                 showError('Failed to delete list');
@@ -466,18 +526,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (configMode) {
                 const targetList = previousListId || 'default';
+
+                // Check if target list exists (only if we are in lists config mode)
+                let targetExists = true;
+                if (configMode === 'lists') {
+                    targetExists = items.some(i => i.id === targetList);
+                }
+
                 const returnLi = document.createElement('li');
                 returnLi.className = 'list-item';
                 returnLi.style.justifyContent = 'center';
-                returnLi.style.cursor = 'pointer';
+                returnLi.style.cursor = targetExists ? 'pointer' : 'default';
                 returnLi.style.marginTop = '20px';
+
+                const btnText = targetExists ? `Return to ${escapeHtml(targetList)}` : `List "${escapeHtml(targetList)}" Deleted`;
+                const btnStyle = targetExists ? 'width: 100%;' : 'width: 100%; opacity: 0.5; cursor: not-allowed;';
+
                 returnLi.innerHTML = `
-                    <button class="sort-btn" id="return-btn" style="width: 100%;">Return to ${escapeHtml(targetList)}</button>
+                    <button class="sort-btn" id="return-btn" style="${btnStyle}" ${targetExists ? '' : 'disabled'}>${btnText}</button>
                 `;
-                returnLi.addEventListener('click', () => {
-                    localStorage.setItem('currentListId', targetList);
-                    window.location.href = '/';
-                });
+                if (targetExists) {
+                    returnLi.addEventListener('click', () => {
+                        localStorage.setItem('currentListId', targetList);
+                        window.location.href = '/';
+                    });
+                }
                 shoppingList.appendChild(returnLi);
             }
             return;
@@ -617,17 +690,36 @@ document.addEventListener('DOMContentLoaded', () => {
         // Add Return Button in Config Mode (Always show)
         if (configMode) {
             const targetList = previousListId || 'default';
+            const targetName = previousListName || targetList;
+
+            // Check if target list exists (only if we are in lists config mode)
+            let targetExists = true;
+            if (configMode === 'lists') {
+                targetExists = items.some(i => i.id === targetList);
+            }
+
             const returnLi = document.createElement('li');
             returnLi.className = 'list-item';
             returnLi.style.justifyContent = 'center';
-            returnLi.style.cursor = 'pointer';
+            returnLi.style.cursor = targetExists ? 'pointer' : 'default';
             returnLi.style.marginTop = '20px';
+
+            const btnText = targetExists ? `Return to ${escapeHtml(targetName)}` : `List "${escapeHtml(targetName)}" Deleted`;
+            const btnStyle = targetExists ? 'width: 100%;' : 'width: 100%; opacity: 0.5; cursor: not-allowed;';
+
             returnLi.innerHTML = `
-                <button class="sort-btn" id="return-btn" style="width: 100%;">Return to ${escapeHtml(targetList)}</button>
+                <button class="sort-btn" id="return-btn" style="${btnStyle}" ${targetExists ? '' : 'disabled'}>${btnText}</button>
             `;
-            returnLi.addEventListener('click', () => {
-                window.location.href = `/?user=${urlParams.get('user') || 'Guest'}&list=${targetList}`;
-            });
+            if (targetExists) {
+                returnLi.addEventListener('click', () => {
+                    localStorage.setItem('currentListId', targetList);
+                    // Persist the name so we can restore it if the list was deleted
+                    if (targetName !== targetList) {
+                        localStorage.setItem('currentListName', targetName);
+                    }
+                    window.location.href = '/';
+                });
+            }
             shoppingList.appendChild(returnLi);
         }
 
@@ -777,6 +869,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
             case 'open':
                 localStorage.setItem('currentListId', itemId);
+                // Save the display name (which is in the text content)
+                const textSpan = listItem.querySelector('.item-text');
+                if (textSpan) {
+                    localStorage.setItem('currentListName', textSpan.textContent);
+                }
                 window.location.href = '/';
                 break;
         }
