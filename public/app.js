@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let items = [];
     let currentSortDirection = null; // 'asc' or 'desc'
     let isUpdating = false;
-    let isConfigMode = false;
+    let configMode = null; // 'lists' | 'users' | null
     let previousListId = null; // Store previous list ID for return
     let eventSource = null;
     let reconnectAttempts = 0;
@@ -75,7 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Functions
     async function loadItems() {
-        if (isConfigMode) return; // Don't load items in config mode
+        if (configMode) return; // Don't load items in config mode
         if (isUpdating) return; // Skip refresh if user is updating
 
         try {
@@ -124,6 +124,29 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function loadUsers() {
+        try {
+            const response = await fetch('/api/users');
+            if (response.ok) {
+                const users = await response.json();
+                // Map users to item structure for rendering
+                items = users.map(user => ({
+                    id: user.name,
+                    text: user.displayName || user.name,
+                    completed: false,
+                    amount: null,
+                    addedBy: null,
+                    updatedAt: user.lastSeen,
+                    isUser: true // Flag to identify user items
+                }));
+                renderItems();
+            }
+        } catch (error) {
+            console.error('Error loading users:', error);
+            showError('Error loading users');
+        }
+    }
+
     async function addItem() {
         const text = itemInput.value.trim();
         if (text === '') return;
@@ -134,8 +157,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 await clearList();
                 itemInput.value = '';
                 return;
-            } else if (text === '/config') {
-                isConfigMode = true;
+            } else if (text === '/config-lists') {
+                configMode = 'lists';
                 previousListId = listId; // Store current list
                 itemInput.value = '';
                 itemInput.placeholder = 'Enter command...'; // Update placeholder
@@ -143,8 +166,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 document.querySelector('.subtitle').textContent = 'Manage Lists';
                 await loadLists();
                 return;
+            } else if (text === '/config-users') {
+                configMode = 'users';
+                previousListId = listId; // Store current list
+                itemInput.value = '';
+                itemInput.placeholder = 'Enter command...'; // Update placeholder
+                document.querySelector('.app-header h1').textContent = 'User Configuration';
+                document.querySelector('.subtitle').textContent = 'Manage Users';
+                await loadUsers();
+                return;
             } else {
-                showError('Unknown command. Only /clear-cache and /config are supported.');
+                showError('Unknown command. Supported: /clear-cache, /config-lists, /config-users');
                 return;
             }
         }
@@ -282,8 +314,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function deleteItem(id) {
-        if (isConfigMode) {
+        if (configMode === 'lists') {
             await deleteList(id);
+            return;
+        } else if (configMode === 'users') {
+            await deleteUser(id);
             return;
         }
 
@@ -320,6 +355,26 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Error deleting list:', error);
             showError('Error deleting list');
+        }
+    }
+
+    async function deleteUser(username) {
+        if (confirm(`Are you sure you want to delete user "${username}"?`)) {
+            try {
+                const response = await fetch(`/api/users/${username}`, {
+                    method: 'DELETE'
+                });
+
+                if (response.ok) {
+                    showToast(`User "${username}" deleted successfully`, 'success');
+                    await loadUsers();
+                } else {
+                    showError('Failed to delete user');
+                }
+            } catch (error) {
+                console.error('Error deleting user:', error);
+                showError('Error deleting user');
+            }
         }
     }
 
@@ -394,7 +449,7 @@ document.addEventListener('DOMContentLoaded', () => {
             listControls.classList.add('hidden');
             shoppingList.innerHTML = ''; // Clear list if empty
 
-            if (isConfigMode) {
+            if (configMode) {
                 const targetList = previousListId || 'default';
                 const returnLi = document.createElement('li');
                 returnLi.className = 'list-item';
@@ -416,7 +471,7 @@ document.addEventListener('DOMContentLoaded', () => {
         listControls.classList.remove('hidden');
 
         // Sort Controls Visibility (Only show if > 1 item and NOT in config mode)
-        if (items.length > 1 && !isConfigMode) {
+        if (items.length > 1 && !configMode) {
             sortControls.classList.remove('hidden');
         } else {
             sortControls.classList.add('hidden');
@@ -452,7 +507,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // textSpan is already defined above
                 let metaText = null;
 
-                if (isConfigMode) {
+                if (configMode) {
                     metaText = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'Never updated';
                 } else if (item.authorName) {
                     metaText = item.authorName;
@@ -465,19 +520,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         const textContentDiv = li.querySelector('.text-content');
                         const newMetaSpan = document.createElement('span');
                         newMetaSpan.className = 'item-author';
-                        if (isConfigMode) newMetaSpan.style.textTransform = 'none';
+                        if (configMode) newMetaSpan.style.textTransform = 'none';
                         newMetaSpan.textContent = metaText;
                         textContentDiv.insertBefore(newMetaSpan, textSpan);
                     } else {
                         if (metaSpan.textContent !== metaText) metaSpan.textContent = metaText;
-                        if (isConfigMode) metaSpan.style.textTransform = 'none';
+                        if (configMode) metaSpan.style.textTransform = 'none';
                         else metaSpan.style.textTransform = '';
                     }
                 } else if (metaSpan) {
                     metaSpan.remove();
                 }
 
-                if (!isConfigMode) {
+                if (!configMode) {
                     // Update amount
                     const qtyDisplay = li.querySelector('.qty-display');
                     if (qtyDisplay && qtyDisplay.textContent !== String(item.amount || 1)) {
@@ -494,13 +549,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 li.className = `list-item ${item.completed ? 'completed' : ''}`;
                 li.setAttribute('data-id', item.id);
 
-                const checkboxHtml = isConfigMode ? '' : `
+                const checkboxHtml = configMode ? '' : `
                     <input type="checkbox" id="item-${item.id}" class="checkbox-input" ${item.completed ? 'checked' : ''} aria-label="Toggle ${escapeHtml(item.text)}">
                     <label for="item-${item.id}" class="checkbox-custom"></label>
                 `;
 
                 let metaHtml = '';
-                if (isConfigMode) {
+                if (configMode) {
                     const dateStr = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'Never updated';
                     metaHtml = `<span class="item-author" style="text-transform: none;">${escapeHtml(dateStr)}</span>`;
                 } else if (item.authorName) {
@@ -509,11 +564,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     metaHtml = `<span class="item-author">${escapeHtml(item.addedBy)}</span>`;
                 }
 
-                const qtyHtml = isConfigMode ? `
+                const qtyHtml = (configMode === 'lists') ? `
                     <button class="qty-btn" data-action="open" aria-label="Open list ${escapeHtml(item.text)}" style="width: auto; padding: 0 8px;">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
                     </button>
-                ` : `
+                ` : (configMode === 'users') ? '' : `
                     <div class="qty-controls">
                         <span class="qty-display">${item.amount || 1}</span>
                         <button class="qty-btn" data-action="increment" aria-label="Increase quantity for ${escapeHtml(item.text)}">+</button>
@@ -521,10 +576,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 `;
 
-                const deleteIconColor = isConfigMode ? 'color: var(--danger-color);' : '';
+                const deleteIconColor = configMode ? 'color: var(--danger-color);' : '';
 
                 li.innerHTML = `
-                    <div class="item-content" data-action="${isConfigMode ? '' : 'toggle'}">
+                    <div class="item-content" data-action="${configMode ? '' : 'toggle'}">
                         ${checkboxHtml}
                         <div class="text-content">
                             ${metaHtml}
@@ -543,7 +598,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Add Return Button in Config Mode (Always show)
-        if (isConfigMode) {
+        if (configMode) {
             const targetList = previousListId || 'default';
             const returnLi = document.createElement('li');
             returnLi.className = 'list-item';
@@ -568,7 +623,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Show/Hide Delete Completed Button (Hide in config mode)
         const hasCompleted = items.some(item => item.completed);
-        if (hasCompleted && !isConfigMode) {
+        if (hasCompleted && !configMode) {
             deleteCompletedBtn.classList.remove('hidden');
             deleteCompletedBtn.style.visibility = 'visible';
         } else {

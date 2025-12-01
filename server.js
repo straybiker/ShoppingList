@@ -297,6 +297,45 @@ app.post('/api/users/register', async (req, res) => {
     });
 });
 
+// Get all users (Config Mode)
+app.get('/api/users', async (req, res) => {
+    try {
+        const users = await readUsers();
+        // Convert users object to array for frontend
+        const userList = Object.values(users).map(user => ({
+            name: user.username,
+            displayName: user.displayName,
+            createdAt: user.createdAt,
+            lastSeen: user.lastSeen
+        }));
+        res.json(userList);
+    } catch (error) {
+        console.error('Error getting users:', error);
+        res.status(500).json({ error: 'Failed to get users' });
+    }
+});
+
+// Delete a user
+app.delete('/api/users/:username', async (req, res) => {
+    await dbMutex.run(async () => {
+        try {
+            const username = req.params.username.toLowerCase();
+            const users = await readUsers();
+
+            if (!users[username]) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+
+            delete users[username];
+            await writeUsers(users);
+            res.json({ success: true });
+        } catch (error) {
+            console.error('Error deleting user:', error);
+            res.status(500).json({ error: 'Failed to delete user' });
+        }
+    });
+});
+
 // Get all lists (Config Mode)
 app.get('/api/lists', async (req, res) => {
     try {

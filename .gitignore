@@ -3,3 +3,6 @@ node_modules/
 Thumbs.db
 *.log
 data/lists.json
+test-results/
+playwright-report/
+blob-report/
