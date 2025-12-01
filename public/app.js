@@ -32,7 +32,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Check for saved user/list in URL
     const urlParams = new URLSearchParams(window.location.search);
-    const listId = urlParams.get('list') || 'default';
+
+    if (urlParams.has('user')) {
+        localStorage.setItem('username', urlParams.get('user'));
+    }
+
+    if (urlParams.has('list')) {
+        localStorage.setItem('currentListId', urlParams.get('list'));
+    }
+
+    // Clean URL if parameters were present
+    if (urlParams.has('user') || urlParams.has('list')) {
+        window.history.replaceState({}, document.title, "/");
+    }
+
+    const listId = localStorage.getItem('currentListId') || 'default';
 
     // User Identification
     const storedUsername = localStorage.getItem('username');
@@ -460,7 +474,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     <button class="sort-btn" id="return-btn" style="width: 100%;">Return to ${escapeHtml(targetList)}</button>
                 `;
                 returnLi.addEventListener('click', () => {
-                    window.location.href = `/?user=${urlParams.get('user') || 'Guest'}&list=${targetList}`;
+                    localStorage.setItem('currentListId', targetList);
+                    window.location.href = '/';
                 });
                 shoppingList.appendChild(returnLi);
             }
@@ -759,7 +774,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 deleteItem(itemId);
                 break;
             case 'open':
-                window.location.href = `/?user=${urlParams.get('user') || 'Guest'}&list=${itemId}`;
+                localStorage.setItem('currentListId', itemId);
+                window.location.href = '/';
                 break;
         }
     });
