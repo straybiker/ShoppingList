@@ -460,6 +460,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!items || items.length === 0) {
             emptyState.classList.remove('hidden');
+            emptyState.innerHTML = '<p>Your list is empty.</p>';
             listControls.classList.add('hidden');
             shoppingList.innerHTML = ''; // Clear list if empty
 
@@ -482,7 +483,8 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        emptyState.classList.add('hidden');
+        emptyState.classList.remove('hidden');
+        emptyState.innerHTML = '<p>Happy shopping</p>';
         listControls.classList.remove('hidden');
 
         // Sort Controls Visibility (Only show if > 1 item and NOT in config mode)
