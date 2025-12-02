@@ -13,6 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const sortAzBtn = document.getElementById('sort-az-btn');
     const sortZaBtn = document.getElementById('sort-za-btn');
     const profileBtn = document.getElementById('profile-btn');
+    const favoriteToggleBtn = document.getElementById('favorite-toggle-btn');
 
     // Online/Offline Status Handling
     window.addEventListener('online', () => {
@@ -108,6 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         applySort();
                     }
                     renderItems();
+                    checkFavoriteStatus(); // Update favorite status
                 }
             }
         } catch (error) {
@@ -494,6 +496,61 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function checkFavoriteStatus() {
+        if (!storedUsername || configMode) {
+            favoriteToggleBtn.classList.add('hidden');
+            return;
+        }
+
+        favoriteToggleBtn.classList.remove('hidden');
+
+        try {
+            const response = await fetch(`/api/favorites/${storedUsername}`);
+            if (response.ok) {
+                const favorites = await response.json();
+                const isFavorite = favorites.includes(listId);
+
+                if (isFavorite) {
+                    favoriteToggleBtn.classList.add('favorited');
+                    favoriteToggleBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
+                } else {
+                    favoriteToggleBtn.classList.remove('favorited');
+                    favoriteToggleBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
+                }
+            }
+        } catch (error) {
+            console.error('Error checking favorite status:', error);
+        }
+    }
+
+    async function toggleFavorite() {
+        if (!storedUsername) return;
+
+        try {
+            const response = await fetch(`/api/favorites/${storedUsername}/${listId}`, {
+                method: 'POST'
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                const isFavorite = data.favorites.includes(listId);
+
+                if (isFavorite) {
+                    favoriteToggleBtn.classList.add('favorited');
+                    favoriteToggleBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
+                    showToast('List added to favorites', 'success');
+                } else {
+                    favoriteToggleBtn.classList.remove('favorited');
+                    favoriteToggleBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
+                    showToast('List removed from favorites', 'success');
+                }
+            }
+        } catch (error) {
+            console.error('Error toggling favorite:', error);
+            showError('Failed to update favorite status');
+        }
+    }
+
     function sortItems(direction) {
         currentSortDirection = direction;
         applySort();
@@ -818,6 +875,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize
     renderItems(); // Show empty state immediately if needed
     loadItems();
+    checkFavoriteStatus();
     setupSSE();
 
     // Event Listeners
@@ -825,12 +883,33 @@ document.addEventListener('DOMContentLoaded', () => {
         addBtn.addEventListener('click', addItem);
     }
 
+    if (itemInput) {
+        itemInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                addItem();
+            }
+        });
+    }
+
     if (deleteCompletedBtn) {
         deleteCompletedBtn.addEventListener('click', deleteCompletedItems);
     }
 
-    if (sortAzBtn) sortAzBtn.addEventListener('click', () => sortItems('asc'));
-    if (sortZaBtn) sortZaBtn.addEventListener('click', () => sortItems('desc'));
+    if (sortAzBtn) {
+        sortAzBtn.addEventListener('click', () => {
+            currentSortDirection = 'asc';
+            applySort();
+            renderItems();
+        });
+    }
+
+    if (sortZaBtn) {
+        sortZaBtn.addEventListener('click', () => {
+            currentSortDirection = 'desc';
+            applySort();
+            renderItems();
+        });
+    }
 
     if (profileBtn) {
         profileBtn.addEventListener('click', () => {
@@ -838,13 +917,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (itemInput) {
-        itemInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') addItem();
-        });
+    if (favoriteToggleBtn) {
+        favoriteToggleBtn.addEventListener('click', toggleFavorite);
     }
 
-    // Event delegation for list item interactions
     shoppingList.addEventListener('click', (e) => {
         const target = e.target.closest('[data-action]');
         if (!target) return;

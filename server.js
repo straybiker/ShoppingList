@@ -336,6 +336,60 @@ app.delete('/api/users/:username', async (req, res) => {
     });
 });
 
+// Get user's favorite lists
+app.get('/api/favorites/:username', async (req, res) => {
+    try {
+        const username = req.params.username.toLowerCase();
+        const users = await readUsers();
+        const user = users[username];
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.json(user.favorites || []);
+    } catch (error) {
+        console.error('Error getting favorites:', error);
+        res.status(500).json({ error: 'Failed to get favorites' });
+    }
+});
+
+// Toggle favorite status for a list
+app.post('/api/favorites/:username/:listId', async (req, res) => {
+    await dbMutex.run(async () => {
+        try {
+            const username = req.params.username.toLowerCase();
+            const listId = req.params.listId;
+
+            const users = await readUsers();
+            const user = users[username];
+
+            if (!user) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+
+            if (!user.favorites) {
+                user.favorites = [];
+            }
+
+            const index = user.favorites.indexOf(listId);
+            if (index > -1) {
+                // Remove from favorites
+                user.favorites.splice(index, 1);
+            } else {
+                // Add to favorites
+                user.favorites.push(listId);
+            }
+
+            await writeUsers(users);
+            res.json({ success: true, favorites: user.favorites });
+        } catch (error) {
+            console.error('Error toggling favorite:', error);
+            res.status(500).json({ error: 'Failed to toggle favorite' });
+        }
+    });
+});
+
 // Get all lists (Config Mode)
 app.get('/api/lists', async (req, res) => {
     try {
@@ -423,6 +477,22 @@ app.delete('/api/lists/:listId', async (req, res) => {
             if (data[listId]) {
                 delete data[listId];
                 await writeData(data);
+
+                // Also remove from all users' favorites
+                const users = await readUsers();
+                let usersUpdated = false;
+
+                for (const username in users) {
+                    const user = users[username];
+                    if (user.favorites && user.favorites.includes(listId)) {
+                        user.favorites = user.favorites.filter(id => id !== listId);
+                        usersUpdated = true;
+                    }
+                }
+
+                if (usersUpdated) {
+                    await writeUsers(users);
+                }
             }
 
             res.json({ success: true });

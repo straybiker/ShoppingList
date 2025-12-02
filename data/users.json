@@ -1,1 +1,27 @@
-{}
+{
+  "bennytestuser": {
+    "username": "bennytestuser",
+    "displayName": "BennyTest User Display",
+    "createdAt": 1764705471015,
+    "lastSeen": 1764705471015
+  },
+  "benny": {
+    "username": "benny",
+    "displayName": "Benny",
+    "createdAt": 1764708705382,
+    "lastSeen": 1764713643592,
+    "favorites": [
+      "1764712512912-5b6ag6wns",
+      "1764714402294-f4lre8snw"
+    ]
+  },
+  "testuser": {
+    "username": "testuser",
+    "displayName": "testuser",
+    "createdAt": 1764711516272,
+    "lastSeen": 1764711575524,
+    "favorites": [
+      "1764711516211-qq86hknm9"
+    ]
+  }
+}
