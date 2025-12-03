@@ -149,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Map users to item structure for rendering
                 items = users.map(user => ({
                     id: user.name,
-                    text: user.displayName || user.name,
+                    text: `${user.name} / ${user.displayName || user.name}`,
                     completed: false,
                     amount: null,
                     addedBy: null,
