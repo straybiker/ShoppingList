@@ -234,17 +234,9 @@ function sanitizeUpdates(updates) {
         }, {});
 }
 
-// Helper to get list data safely (handles migration from array to object)
+// Helper to get list data safely
 function getList(data, listId) {
-    if (!data[listId]) return null;
-    if (Array.isArray(data[listId])) {
-        // Convert legacy array to object structure
-        data[listId] = {
-            items: data[listId],
-            updatedAt: null // Unknown for legacy lists
-        };
-    }
-    return data[listId];
+    return data[listId] || null;
 }
 
 // Helper to touch a list (update timestamp)
@@ -395,12 +387,11 @@ app.get('/api/lists', async (req, res) => {
     try {
         const data = await readData();
         const lists = Object.entries(data).map(([name, value]) => {
-            const isLegacy = Array.isArray(value);
             return {
                 name,
-                displayName: isLegacy ? name : (value.displayName || name),
-                updatedAt: isLegacy ? null : value.updatedAt,
-                itemCount: isLegacy ? value.length : value.items.length
+                displayName: value.displayName || name,
+                updatedAt: value.updatedAt,
+                itemCount: value.items.length
             };
         });
         res.json(lists);
@@ -452,10 +443,9 @@ app.get('/api/lists/:listId', async (req, res) => {
             return res.status(404).json({ error: 'List not found' });
         }
 
-        const isLegacy = Array.isArray(data[listId]); // Check raw data for legacy format
         const listDetails = {
             name: listId,
-            displayName: isLegacy ? listId : (list.displayName || listId),
+            displayName: list.displayName || listId,
             updatedAt: list.updatedAt,
             itemCount: list.items.length
         };
