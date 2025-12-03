@@ -13,11 +13,12 @@ A modern, real-time shopping list application built with Node.js, Express, and v
 - **Slash Commands**:
   - `/clear-cache`: Instantly delete all items in the current list.
   - `/config-lists`: Enter configuration mode to manage and delete existing lists.
+  - `/config-users`: Enter user configuration mode to view and manage users.
 - **Smart UI**:
   - **Mobile-First Layout**: Fixed header and input box with an endless scrolling list.
-  - Dark premium theme with glassmorphism effects.
-  - Responsive design for mobile and desktop.
-  - Toast notifications for feedback.
+  - **Modern Aesthetics**: Dark premium theme with glassmorphism effects and clean, borderless inputs.
+  - **Responsive Design**: Optimized for both mobile and desktop experiences.
+  - **Interactive Feedback**: Toast notifications and smooth transitions.
 - **List Management**:
   - Add, edit, and delete items.
   - Mark items as completed.
@@ -50,7 +51,7 @@ Legacy URL parameters for user setting (`?user=John`) are still supported for qu
 
 ### Local Development
 
-1. **Prerequisites**: Ensure Node.js is installed.
+1. **Prerequisites**: Ensure Node.js (v18 or higher) is installed.
 2. **Install Dependencies**:
    ```bash
    npm install
