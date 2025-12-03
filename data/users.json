@@ -1,0 +1,19 @@
+{
+  "benny": {
+    "username": "benny",
+    "displayName": "benny",
+    "createdAt": 1764708705382,
+    "lastSeen": 1764792958015,
+    "favorites": [
+      "1764712512912-5b6ag6wns",
+      "1764791697474-xjfuka1qd",
+      "1764791844352-8ppmseikn"
+    ]
+  },
+  "testusertestuser": {
+    "username": "testusertestuser",
+    "displayName": "Benny",
+    "createdAt": 1764790897731,
+    "lastSeen": 1764790897731
+  }
+}

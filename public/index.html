@@ -12,26 +12,61 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-    <!-- Favicon -->
-    <link rel="icon" type="image/png" href="icon.png">
+    <!-- PWA -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <link rel="apple-touch-icon" href="icons/icon-192x192.png">
 
     <!-- Styles -->
     <link rel="stylesheet" href="style.css">
+
+    <!-- Service Worker Registration -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    })
+                    .catch(err => {
+                        console.log('ServiceWorker registration failed: ', err);
+                    });
+            });
+        }
+    </script>
 </head>
 
 <body>
     <div class="background-gradient"></div>
 
     <main class="app-container">
-
         <header class="app-header">
-            <h1>Shopping List</h1>
-            <p class="subtitle">Stay organized, buy smart.</p>
+            <div class="title-container">
+                <h1>Shopping List</h1>
+                <p class="subtitle">Stay organized, buy smart.</p>
+            </div>
+            <div class="header-right">
+                <button id="favorite-toggle-btn" class="icon-btn hidden" aria-label="Toggle Favorite">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon
+                            points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2">
+                        </polygon>
+                    </svg>
+                </button>
+                <button id="profile-btn" class="icon-btn" aria-label="User Profile">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                </button>
+            </div>
         </header>
 
         <section class="input-area">
-            <div class="input-group">
-                <input type="text" id="item-input" placeholder="Add a new item..." autocomplete="off" maxlength="128">
+            <div class="input-wrapper">
+                <input type="text" id="item-input" placeholder="Add a new item..." autocomplete="off">
                 <button id="add-btn" aria-label="Add item">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                         <path d="M12 5V19M5 12H19" stroke="currentColor" stroke-width="2" stroke-linecap="round"
@@ -45,9 +80,6 @@
             <ul id="shopping-list" class="shopping-list">
                 <!-- Items will be injected here -->
             </ul>
-            <div id="empty-state" class="empty-state hidden">
-                <p>Your list is empty.</p>
-            </div>
             <div id="list-controls" class="list-controls hidden">
                 <div class="sort-controls">
                     <button id="sort-az-btn" class="sort-btn" aria-label="Sort A to Z">
@@ -58,6 +90,9 @@
                     </button>
                 </div>
                 <button id="delete-completed-btn" class="delete-completed-btn">Delete completed</button>
+            </div>
+            <div id="empty-state" class="empty-state hidden">
+                <p>Your list is empty.</p>
             </div>
         </section>
     </main>

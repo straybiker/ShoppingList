@@ -9,6 +9,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'lists.json');
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
 // Trust proxy (required for correct IP detection behind Nginx/Docker/LXC proxies)
 app.set('trust proxy', 1);
@@ -76,6 +77,23 @@ async function readData() {
         console.error('Error reading data file:', err);
         return {};
     }
+}
+
+async function readUsers() {
+    try {
+        const data = await fs.readFile(USERS_FILE, 'utf8');
+        return JSON.parse(data);
+    } catch (err) {
+        if (err.code === 'ENOENT') {
+            return {};
+        }
+        console.error('Error reading users file:', err);
+        return {};
+    }
+}
+
+async function writeUsers(users) {
+    await fs.writeFile(USERS_FILE, JSON.stringify(users, null, 2));
 }
 
 // Mutex for atomic operations
@@ -216,17 +234,9 @@ function sanitizeUpdates(updates) {
         }, {});
 }
 
-// Helper to get list data safely (handles migration from array to object)
+// Helper to get list data safely
 function getList(data, listId) {
-    if (!data[listId]) return null;
-    if (Array.isArray(data[listId])) {
-        // Convert legacy array to object structure
-        data[listId] = {
-            items: data[listId],
-            updatedAt: null // Unknown for legacy lists
-        };
-    }
-    return data[listId];
+    return data[listId] || null;
 }
 
 // Helper to touch a list (update timestamp)
@@ -239,22 +249,211 @@ function touchList(data, listId) {
 
 // API Routes
 
+// Register/Update User
+app.post('/api/users/register', async (req, res) => {
+    await dbMutex.run(async () => {
+        try {
+            const { username, displayName } = req.body;
+
+            if (!username || typeof username !== 'string' || username.trim() === '') {
+                return res.status(400).json({ error: 'Username is required' });
+            }
+
+            const safeUsername = username.trim().toLowerCase();
+            const safeDisplayName = displayName ? displayName.trim() : safeUsername;
+
+            const users = await readUsers();
+
+            // Check if username exists
+            if (users[safeUsername]) {
+                // If it exists, we only allow updating if it's the same "session" or we just treat it as a login/update
+                // For this simple app, we'll allow updating the display name for the existing username
+                users[safeUsername].displayName = safeDisplayName;
+                users[safeUsername].lastSeen = Date.now();
+            } else {
+                // Register new user
+                users[safeUsername] = {
+                    username: safeUsername,
+                    displayName: safeDisplayName,
+                    createdAt: Date.now(),
+                    lastSeen: Date.now()
+                };
+            }
+
+            await writeUsers(users);
+            res.json({ success: true, user: users[safeUsername] });
+        } catch (error) {
+            console.error('Error registering user:', error);
+            res.status(500).json({ error: 'Failed to register user' });
+        }
+    });
+});
+
+// Get all users (Config Mode)
+app.get('/api/users', async (req, res) => {
+    try {
+        const users = await readUsers();
+        // Convert users object to array for frontend
+        const userList = Object.values(users).map(user => ({
+            name: user.username,
+            displayName: user.displayName,
+            createdAt: user.createdAt,
+            lastSeen: user.lastSeen
+        }));
+        res.json(userList);
+    } catch (error) {
+        console.error('Error getting users:', error);
+        res.status(500).json({ error: 'Failed to get users' });
+    }
+});
+
+// Delete a user
+app.delete('/api/users/:username', async (req, res) => {
+    await dbMutex.run(async () => {
+        try {
+            const username = req.params.username.toLowerCase();
+            const users = await readUsers();
+
+            if (!users[username]) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+
+            delete users[username];
+            await writeUsers(users);
+            res.json({ success: true });
+        } catch (error) {
+            console.error('Error deleting user:', error);
+            res.status(500).json({ error: 'Failed to delete user' });
+        }
+    });
+});
+
+// Get user's favorite lists
+app.get('/api/favorites/:username', async (req, res) => {
+    try {
+        const username = req.params.username.toLowerCase();
+        const users = await readUsers();
+        const user = users[username];
+
+        if (!user) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        res.json(user.favorites || []);
+    } catch (error) {
+        console.error('Error getting favorites:', error);
+        res.status(500).json({ error: 'Failed to get favorites' });
+    }
+});
+
+// Toggle favorite status for a list
+app.post('/api/favorites/:username/:listId', async (req, res) => {
+    await dbMutex.run(async () => {
+        try {
+            const username = req.params.username.toLowerCase();
+            const listId = req.params.listId;
+
+            const users = await readUsers();
+            const user = users[username];
+
+            if (!user) {
+                return res.status(404).json({ error: 'User not found' });
+            }
+
+            if (!user.favorites) {
+                user.favorites = [];
+            }
+
+            const index = user.favorites.indexOf(listId);
+            if (index > -1) {
+                // Remove from favorites
+                user.favorites.splice(index, 1);
+            } else {
+                // Add to favorites
+                user.favorites.push(listId);
+            }
+
+            await writeUsers(users);
+            res.json({ success: true, favorites: user.favorites });
+        } catch (error) {
+            console.error('Error toggling favorite:', error);
+            res.status(500).json({ error: 'Failed to toggle favorite' });
+        }
+    });
+});
+
 // Get all lists (Config Mode)
 app.get('/api/lists', async (req, res) => {
     try {
         const data = await readData();
         const lists = Object.entries(data).map(([name, value]) => {
-            const isLegacy = Array.isArray(value);
             return {
                 name,
-                updatedAt: isLegacy ? null : value.updatedAt,
-                itemCount: isLegacy ? value.length : value.items.length
+                displayName: value.displayName || name,
+                updatedAt: value.updatedAt,
+                itemCount: value.items.length
             };
         });
         res.json(lists);
     } catch (error) {
         console.error('Error getting lists:', error);
         res.status(500).json({ error: 'Failed to retrieve lists' });
+    }
+});
+
+// Create a new list with a display name (Config Mode)
+app.post('/api/lists', async (req, res) => {
+    await dbMutex.run(async () => {
+        try {
+            const { displayName } = req.body;
+
+            if (!displayName || typeof displayName !== 'string' || displayName.trim() === '') {
+                return res.status(400).json({ error: 'Display name is required' });
+            }
+
+            const safeName = displayName.trim();
+
+            // Generate a unique ID for the list
+            const listId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+            const data = await readData();
+            data[listId] = {
+                items: [],
+                displayName: safeName,
+                updatedAt: Date.now()
+            };
+
+            await writeData(data);
+            res.json({ success: true, listId, displayName: safeName });
+        } catch (error) {
+            console.error('Error creating list:', error);
+            res.status(500).json({ error: 'Failed to create list' });
+        }
+    });
+});
+
+// Get a specific list details
+app.get('/api/lists/:listId', async (req, res) => {
+    try {
+        const { listId } = req.params;
+        const data = await readData();
+        const list = getList(data, listId);
+
+        if (!list) {
+            return res.status(404).json({ error: 'List not found' });
+        }
+
+        const listDetails = {
+            name: listId,
+            displayName: list.displayName || listId,
+            updatedAt: list.updatedAt,
+            itemCount: list.items.length
+        };
+
+        res.json(listDetails);
+    } catch (error) {
+        console.error('Error getting list details:', error);
+        res.status(500).json({ error: 'Failed to retrieve list details' });
     }
 });
 
@@ -268,6 +467,22 @@ app.delete('/api/lists/:listId', async (req, res) => {
             if (data[listId]) {
                 delete data[listId];
                 await writeData(data);
+
+                // Also remove from all users' favorites
+                const users = await readUsers();
+                let usersUpdated = false;
+
+                for (const username in users) {
+                    const user = users[username];
+                    if (user.favorites && user.favorites.includes(listId)) {
+                        user.favorites = user.favorites.filter(id => id !== listId);
+                        usersUpdated = true;
+                    }
+                }
+
+                if (usersUpdated) {
+                    await writeUsers(users);
+                }
             }
 
             res.json({ success: true });
@@ -283,6 +498,11 @@ app.get('/api/items/:listId', async (req, res) => {
     try {
         const { listId } = req.params;
         const data = await readData();
+
+        if (!data[listId]) {
+            return res.status(404).json({ error: 'List not found' });
+        }
+
         const list = getList(data, listId);
         const items = list ? list.items : [];
         res.json(items);
@@ -304,7 +524,8 @@ app.post('/api/items/:listId', async (req, res) => {
                 text: incoming && incoming.text,
                 amount: incoming && incoming.amount,
                 completed: !!(incoming && incoming.completed),
-                addedBy: incoming && incoming.addedBy ? String(incoming.addedBy) : 'Guest'
+                addedBy: incoming && incoming.addedBy ? String(incoming.addedBy) : 'Guest',
+                authorName: incoming && incoming.authorName ? String(incoming.authorName) : (incoming && incoming.addedBy ? String(incoming.addedBy) : 'Guest')
             };
 
             const validation = validateItemData(candidate);
@@ -314,15 +535,16 @@ app.post('/api/items/:listId', async (req, res) => {
 
             const data = await readData();
 
-            // Initialize list if missing
+            // Initialize list if missing (recreation logic)
             if (!data[listId]) {
-                data[listId] = { items: [], updatedAt: Date.now() };
-            } else {
-                // Ensure structure is migrated
-                getList(data, listId);
+                data[listId] = {
+                    items: [],
+                    displayName: incoming.displayName || listId,
+                    updatedAt: Date.now()
+                };
             }
 
-            const list = data[listId];
+            const list = getList(data, listId);
 
             // Ensure a unique server-generated id
             let id = incoming && incoming.id ? String(incoming.id) : null;
@@ -335,7 +557,8 @@ app.post('/api/items/:listId', async (req, res) => {
                 text: String(candidate.text).trim(),
                 completed: !!candidate.completed,
                 amount: typeof candidate.amount === 'number' ? candidate.amount : 1,
-                addedBy: String(candidate.addedBy)
+                addedBy: String(candidate.addedBy),
+                authorName: String(candidate.authorName)
             };
 
             list.items.push(newItem);

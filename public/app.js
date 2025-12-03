@@ -1,25 +1,74 @@
+window.onerror = function (message, source, lineno, colno, error) {
+    console.error('Global error:', message, 'at', source, ':', lineno, ':', colno);
+};
+
 document.addEventListener('DOMContentLoaded', () => {
     // DOM Elements
     const itemInput = document.getElementById('item-input');
     const addBtn = document.getElementById('add-btn');
     const shoppingList = document.getElementById('shopping-list');
     const emptyState = document.getElementById('empty-state');
+    const listControls = document.getElementById('list-controls');
     const deleteCompletedBtn = document.getElementById('delete-completed-btn');
     const sortAzBtn = document.getElementById('sort-az-btn');
     const sortZaBtn = document.getElementById('sort-za-btn');
+    const profileBtn = document.getElementById('profile-btn');
+    const favoriteToggleBtn = document.getElementById('favorite-toggle-btn');
 
-    // URL Params
+    // Online/Offline Status Handling
+    window.addEventListener('online', () => {
+        showToast('You are back online', 'success');
+        document.body.classList.remove('offline');
+    });
+
+    window.addEventListener('offline', () => {
+        showToast('You are offline. Changes may not save.', 'error');
+        document.body.classList.add('offline');
+    });
+
+    // Initial check
+    if (!navigator.onLine) {
+        document.body.classList.add('offline');
+    }
+
+    // Check for saved user/list in URL
     const urlParams = new URLSearchParams(window.location.search);
-    const listId = urlParams.get('list') || 'default';
-    const userName = urlParams.get('user') || 'Guest';
+
+    if (urlParams.has('user')) {
+        localStorage.setItem('username', urlParams.get('user'));
+    }
+
+    if (urlParams.has('list')) {
+        localStorage.setItem('currentListId', urlParams.get('list'));
+    }
+
+    // Clean URL if parameters were present
+    if (urlParams.has('user') || urlParams.has('list')) {
+        window.history.replaceState({}, document.title, "/");
+    }
+
+    const listId = localStorage.getItem('currentListId') || 'default';
+
+    // User Identification
+    const storedUsername = localStorage.getItem('username');
+    const storedDisplayName = localStorage.getItem('displayName');
+
+    if (!storedUsername) {
+        window.location.href = '/profile.html';
+        return;
+    }
+
+    const userName = storedUsername;
+    const displayName = storedDisplayName || userName;
 
     // State
     const API_URL = '/api/items';
     let items = [];
     let currentSortDirection = null; // 'asc' or 'desc'
     let isUpdating = false;
-    let isConfigMode = false;
+    let configMode = null; // 'lists' | 'users' | null
     let previousListId = null; // Store previous list ID for return
+    let previousListName = null; // Store previous list display name
     let eventSource = null;
     let reconnectAttempts = 0;
     const MAX_RECONNECT_ATTEMPTS = 5;
@@ -42,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Functions
     async function loadItems() {
-        if (isConfigMode) return; // Don't load items in config mode
+        if (configMode) return; // Don't load items in config mode
         if (isUpdating) return; // Skip refresh if user is updating
 
         try {
@@ -60,6 +109,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         applySort();
                     }
                     renderItems();
+                    checkFavoriteStatus(); // Update favorite status
                 }
             }
         } catch (error) {
@@ -70,13 +120,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function loadLists() {
         try {
-            const response = await fetch('/api/lists');
+            const response = await fetch(`/api/lists?t=${Date.now()}`);
             if (response.ok) {
                 const lists = await response.json();
                 // Map lists to item structure for rendering
                 items = lists.map(list => ({
                     id: list.name,
-                    text: list.name,
+                    text: list.displayName || list.name,
                     completed: false,
                     amount: null,
                     addedBy: null,
@@ -91,6 +141,29 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function loadUsers() {
+        try {
+            const response = await fetch(`/api/users?t=${Date.now()}`);
+            if (response.ok) {
+                const users = await response.json();
+                // Map users to item structure for rendering
+                items = users.map(user => ({
+                    id: user.name,
+                    text: `${user.name} / ${user.displayName || user.name}`,
+                    completed: false,
+                    amount: null,
+                    addedBy: null,
+                    updatedAt: user.lastSeen,
+                    isUser: true // Flag to identify user items
+                }));
+                renderItems();
+            }
+        } catch (error) {
+            console.error('Error loading users:', error);
+            showError('Error loading users');
+        }
+    }
+
     async function addItem() {
         const text = itemInput.value.trim();
         if (text === '') return;
@@ -101,19 +174,80 @@ document.addEventListener('DOMContentLoaded', () => {
                 await clearList();
                 itemInput.value = '';
                 return;
-            } else if (text === '/config') {
-                isConfigMode = true;
+            } else if (text === '/config-lists') {
+                // Fetch current list name before switching
+                try {
+                    const response = await fetch(`/api/lists/${listId}`);
+                    if (response.ok) {
+                        const listData = await response.json();
+                        previousListName = listData.displayName;
+                    } else {
+                        previousListName = listId;
+                    }
+                } catch (e) {
+                    previousListName = listId;
+                }
+
+                configMode = 'lists';
                 previousListId = listId; // Store current list
                 itemInput.value = '';
-                itemInput.placeholder = 'Enter command...'; // Update placeholder
+                itemInput.placeholder = 'Add new list...'; // Update placeholder
                 document.querySelector('.app-header h1').textContent = 'Configuration';
                 document.querySelector('.subtitle').textContent = 'Manage Lists';
                 await loadLists();
                 return;
+            } else if (text === '/config-users') {
+                // Fetch current list name before switching
+                try {
+                    const response = await fetch(`/api/lists/${listId}`);
+                    if (response.ok) {
+                        const listData = await response.json();
+                        previousListName = listData.displayName;
+                    } else {
+                        previousListName = listId;
+                    }
+                } catch (e) {
+                    previousListName = listId;
+                }
+
+                configMode = 'users';
+                previousListId = listId; // Store current list
+                itemInput.value = '';
+                itemInput.placeholder = 'Enter command...'; // Update placeholder
+                document.querySelector('.app-header h1').textContent = 'User Configuration';
+                document.querySelector('.subtitle').textContent = 'Manage Users';
+                await loadUsers();
+                return;
             } else {
-                showError('Unknown command. Only /clear-cache and /config are supported.');
+                showError('Unknown command. Supported: /clear-cache, /config-lists, /config-users');
                 return;
             }
+        }
+
+        // Handle list creation in config mode
+        if (configMode === 'lists') {
+            try {
+                const response = await fetch('/api/lists', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ displayName: text })
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    showToast(`List "${result.displayName}" created successfully`, 'success');
+                    await loadLists();
+                    itemInput.value = '';
+                    itemInput.focus();
+                } else {
+                    const errText = await response.text();
+                    showError('Failed to create list: ' + errText);
+                }
+            } catch (error) {
+                console.error('Error creating list:', error);
+                showError('Error creating list');
+            }
+            return;
         }
 
         // Check if item with same name already exists (case-insensitive)
@@ -134,7 +268,8 @@ document.addEventListener('DOMContentLoaded', () => {
             text: text,
             completed: false,
             amount: 1,
-            addedBy: userName
+            addedBy: userName,
+            authorName: displayName
         };
 
         isUpdating = true;
@@ -142,7 +277,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const response = await fetch(`${API_URL}/${listId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(newItem)
+                body: JSON.stringify({
+                    ...newItem,
+                    displayName: localStorage.getItem('currentListName') // Send current list name
+                })
             });
 
             if (response.ok) {
@@ -248,8 +386,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function deleteItem(id) {
-        if (isConfigMode) {
+        if (configMode === 'lists') {
             await deleteList(id);
+            return;
+        } else if (configMode === 'users') {
+            await deleteUser(id);
             return;
         }
 
@@ -273,12 +414,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function deleteList(id) {
         try {
+            // Get list name for toast
+            const list = items.find(i => i.id === id);
+            const listName = list ? list.text : id;
+
             const response = await fetch(`/api/lists/${id}`, {
                 method: 'DELETE'
             });
 
             if (response.ok) {
-                showToast(`List "${id}" deleted successfully`, 'success');
+                showToast(`List "${listName}" deleted successfully`, 'success');
                 await loadLists();
             } else {
                 showError('Failed to delete list');
@@ -286,6 +431,27 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Error deleting list:', error);
             showError('Error deleting list');
+        }
+    }
+
+    async function deleteUser(username) {
+        const user = items.find(i => i.id === username);
+        const displayName = user ? user.text : username;
+
+        try {
+            const response = await fetch(`/api/users/${username}`, {
+                method: 'DELETE'
+            });
+
+            if (response.ok) {
+                showToast(`User "${displayName}" deleted successfully`, 'success');
+                await loadUsers();
+            } else {
+                showError('Failed to delete user');
+            }
+        } catch (error) {
+            console.error('Error deleting user:', error);
+            showError('Error deleting user');
         }
     }
 
@@ -330,6 +496,61 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function checkFavoriteStatus() {
+        if (!storedUsername || configMode) {
+            favoriteToggleBtn.classList.add('hidden');
+            return;
+        }
+
+        favoriteToggleBtn.classList.remove('hidden');
+
+        try {
+            const response = await fetch(`/api/favorites/${storedUsername}`);
+            if (response.ok) {
+                const favorites = await response.json();
+                const isFavorite = favorites.includes(listId);
+
+                if (isFavorite) {
+                    favoriteToggleBtn.classList.add('favorited');
+                    favoriteToggleBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
+                } else {
+                    favoriteToggleBtn.classList.remove('favorited');
+                    favoriteToggleBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
+                }
+            }
+        } catch (error) {
+            console.error('Error checking favorite status:', error);
+        }
+    }
+
+    async function toggleFavorite() {
+        if (!storedUsername) return;
+
+        try {
+            const response = await fetch(`/api/favorites/${storedUsername}/${listId}`, {
+                method: 'POST'
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                const isFavorite = data.favorites.includes(listId);
+
+                if (isFavorite) {
+                    favoriteToggleBtn.classList.add('favorited');
+                    favoriteToggleBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
+                    showToast('List added to favorites', 'success');
+                } else {
+                    favoriteToggleBtn.classList.remove('favorited');
+                    favoriteToggleBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>`;
+                    showToast('List removed from favorites', 'success');
+                }
+            }
+        } catch (error) {
+            console.error('Error toggling favorite:', error);
+            showError('Failed to update favorite status');
+        }
+    }
+
     function sortItems(direction) {
         currentSortDirection = direction;
         applySort();
@@ -357,32 +578,48 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!items || items.length === 0) {
             emptyState.classList.remove('hidden');
+            emptyState.innerHTML = '<p>Your list is empty.</p>';
             listControls.classList.add('hidden');
             shoppingList.innerHTML = ''; // Clear list if empty
 
-            if (isConfigMode) {
+            if (configMode) {
                 const targetList = previousListId || 'default';
+
+                // Check if target list exists (only if we are in lists config mode)
+                let targetExists = true;
+                if (configMode === 'lists') {
+                    targetExists = items.some(i => i.id === targetList);
+                }
+
                 const returnLi = document.createElement('li');
                 returnLi.className = 'list-item';
                 returnLi.style.justifyContent = 'center';
-                returnLi.style.cursor = 'pointer';
+                returnLi.style.cursor = targetExists ? 'pointer' : 'default';
                 returnLi.style.marginTop = '20px';
+
+                const btnText = targetExists ? `Return to ${escapeHtml(targetList)}` : `List "${escapeHtml(targetList)}" Deleted`;
+                const btnStyle = targetExists ? 'width: 100%;' : 'width: 100%; opacity: 0.5; cursor: not-allowed;';
+
                 returnLi.innerHTML = `
-                    <button class="sort-btn" id="return-btn" style="width: 100%;">Return to ${escapeHtml(targetList)}</button>
+                    <button class="sort-btn" id="return-btn" style="${btnStyle}" ${targetExists ? '' : 'disabled'}>${btnText}</button>
                 `;
-                returnLi.addEventListener('click', () => {
-                    window.location.href = `/?user=${urlParams.get('user') || 'Guest'}&list=${targetList}`;
-                });
+                if (targetExists) {
+                    returnLi.addEventListener('click', () => {
+                        localStorage.setItem('currentListId', targetList);
+                        window.location.href = '/';
+                    });
+                }
                 shoppingList.appendChild(returnLi);
             }
             return;
         }
 
-        emptyState.classList.add('hidden');
+        emptyState.classList.remove('hidden');
+        emptyState.innerHTML = '<p>Happy shopping</p>';
         listControls.classList.remove('hidden');
 
         // Sort Controls Visibility (Only show if > 1 item and NOT in config mode)
-        if (items.length > 1 && !isConfigMode) {
+        if (items.length > 1 && !configMode) {
             sortControls.classList.remove('hidden');
         } else {
             sortControls.classList.add('hidden');
@@ -418,8 +655,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 // textSpan is already defined above
                 let metaText = null;
 
-                if (isConfigMode) {
+                if (configMode) {
                     metaText = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'Never updated';
+                } else if (item.authorName) {
+                    metaText = item.authorName;
                 } else if (item.addedBy && item.addedBy !== 'Guest') {
                     metaText = item.addedBy;
                 }
@@ -429,19 +668,19 @@ document.addEventListener('DOMContentLoaded', () => {
                         const textContentDiv = li.querySelector('.text-content');
                         const newMetaSpan = document.createElement('span');
                         newMetaSpan.className = 'item-author';
-                        if (isConfigMode) newMetaSpan.style.textTransform = 'none';
+                        if (configMode) newMetaSpan.style.textTransform = 'none';
                         newMetaSpan.textContent = metaText;
                         textContentDiv.insertBefore(newMetaSpan, textSpan);
                     } else {
                         if (metaSpan.textContent !== metaText) metaSpan.textContent = metaText;
-                        if (isConfigMode) metaSpan.style.textTransform = 'none';
+                        if (configMode) metaSpan.style.textTransform = 'none';
                         else metaSpan.style.textTransform = '';
                     }
                 } else if (metaSpan) {
                     metaSpan.remove();
                 }
 
-                if (!isConfigMode) {
+                if (!configMode) {
                     // Update amount
                     const qtyDisplay = li.querySelector('.qty-display');
                     if (qtyDisplay && qtyDisplay.textContent !== String(item.amount || 1)) {
@@ -458,24 +697,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 li.className = `list-item ${item.completed ? 'completed' : ''}`;
                 li.setAttribute('data-id', item.id);
 
-                const checkboxHtml = isConfigMode ? '' : `
+                const checkboxHtml = configMode ? '' : `
                     <input type="checkbox" id="item-${item.id}" class="checkbox-input" ${item.completed ? 'checked' : ''} aria-label="Toggle ${escapeHtml(item.text)}">
                     <label for="item-${item.id}" class="checkbox-custom"></label>
                 `;
 
                 let metaHtml = '';
-                if (isConfigMode) {
+                if (configMode) {
                     const dateStr = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'Never updated';
                     metaHtml = `<span class="item-author" style="text-transform: none;">${escapeHtml(dateStr)}</span>`;
+                } else if (item.authorName) {
+                    metaHtml = `<span class="item-author">${escapeHtml(item.authorName)}</span>`;
                 } else if (item.addedBy && item.addedBy !== 'Guest') {
                     metaHtml = `<span class="item-author">${escapeHtml(item.addedBy)}</span>`;
                 }
 
-                const qtyHtml = isConfigMode ? `
+                const qtyHtml = (configMode === 'lists') ? `
                     <button class="qty-btn" data-action="open" aria-label="Open list ${escapeHtml(item.text)}" style="width: auto; padding: 0 8px;">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
                     </button>
-                ` : `
+                ` : (configMode === 'users') ? '' : `
                     <div class="qty-controls">
                         <span class="qty-display">${item.amount || 1}</span>
                         <button class="qty-btn" data-action="increment" aria-label="Increase quantity for ${escapeHtml(item.text)}">+</button>
@@ -483,10 +724,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 `;
 
-                const deleteIconColor = isConfigMode ? 'color: var(--danger-color);' : '';
+                const deleteIconColor = configMode ? 'color: var(--danger-color);' : '';
 
                 li.innerHTML = `
-                    <div class="item-content" data-action="${isConfigMode ? '' : 'toggle'}">
+                    <div class="item-content" data-action="${configMode ? '' : 'toggle'}">
                         ${checkboxHtml}
                         <div class="text-content">
                             ${metaHtml}
@@ -505,19 +746,38 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Add Return Button in Config Mode (Always show)
-        if (isConfigMode) {
+        if (configMode) {
             const targetList = previousListId || 'default';
+            const targetName = previousListName || targetList;
+
+            // Check if target list exists (only if we are in lists config mode)
+            let targetExists = true;
+            if (configMode === 'lists') {
+                targetExists = items.some(i => i.id === targetList);
+            }
+
             const returnLi = document.createElement('li');
             returnLi.className = 'list-item';
             returnLi.style.justifyContent = 'center';
-            returnLi.style.cursor = 'pointer';
+            returnLi.style.cursor = targetExists ? 'pointer' : 'default';
             returnLi.style.marginTop = '20px';
+
+            const btnText = targetExists ? `Return to ${escapeHtml(targetName)}` : `List "${escapeHtml(targetName)}" Deleted`;
+            const btnStyle = targetExists ? 'width: 100%;' : 'width: 100%; opacity: 0.5; cursor: not-allowed;';
+
             returnLi.innerHTML = `
-                <button class="sort-btn" id="return-btn" style="width: 100%;">Return to ${escapeHtml(targetList)}</button>
+                <button class="sort-btn" id="return-btn" style="${btnStyle}" ${targetExists ? '' : 'disabled'}>${btnText}</button>
             `;
-            returnLi.addEventListener('click', () => {
-                window.location.href = `/?user=${urlParams.get('user') || 'Guest'}&list=${targetList}`;
-            });
+            if (targetExists) {
+                returnLi.addEventListener('click', () => {
+                    localStorage.setItem('currentListId', targetList);
+                    // Persist the name so we can restore it if the list was deleted
+                    if (targetName !== targetList) {
+                        localStorage.setItem('currentListName', targetName);
+                    }
+                    window.location.href = '/';
+                });
+            }
             shoppingList.appendChild(returnLi);
         }
 
@@ -530,7 +790,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Show/Hide Delete Completed Button (Hide in config mode)
         const hasCompleted = items.some(item => item.completed);
-        if (hasCompleted && !isConfigMode) {
+        if (hasCompleted && !configMode) {
             deleteCompletedBtn.classList.remove('hidden');
             deleteCompletedBtn.style.visibility = 'visible';
         } else {
@@ -615,6 +875,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize
     renderItems(); // Show empty state immediately if needed
     loadItems();
+    checkFavoriteStatus();
     setupSSE();
 
     // Event Listeners
@@ -622,20 +883,44 @@ document.addEventListener('DOMContentLoaded', () => {
         addBtn.addEventListener('click', addItem);
     }
 
+    if (itemInput) {
+        itemInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                addItem();
+            }
+        });
+    }
+
     if (deleteCompletedBtn) {
         deleteCompletedBtn.addEventListener('click', deleteCompletedItems);
     }
 
-    if (sortAzBtn) sortAzBtn.addEventListener('click', () => sortItems('asc'));
-    if (sortZaBtn) sortZaBtn.addEventListener('click', () => sortItems('desc'));
-
-    if (itemInput) {
-        itemInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') addItem();
+    if (sortAzBtn) {
+        sortAzBtn.addEventListener('click', () => {
+            currentSortDirection = 'asc';
+            applySort();
+            renderItems();
         });
     }
 
-    // Event delegation for list item interactions
+    if (sortZaBtn) {
+        sortZaBtn.addEventListener('click', () => {
+            currentSortDirection = 'desc';
+            applySort();
+            renderItems();
+        });
+    }
+
+    if (profileBtn) {
+        profileBtn.addEventListener('click', () => {
+            window.location.href = '/profile.html';
+        });
+    }
+
+    if (favoriteToggleBtn) {
+        favoriteToggleBtn.addEventListener('click', toggleFavorite);
+    }
+
     shoppingList.addEventListener('click', (e) => {
         const target = e.target.closest('[data-action]');
         if (!target) return;
@@ -660,7 +945,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 deleteItem(itemId);
                 break;
             case 'open':
-                window.location.href = `/?user=${urlParams.get('user') || 'Guest'}&list=${itemId}`;
+                localStorage.setItem('currentListId', itemId);
+                // Save the display name (which is in the text content)
+                const textSpan = listItem.querySelector('.item-text');
+                if (textSpan) {
+                    localStorage.setItem('currentListName', textSpan.textContent);
+                }
+                window.location.href = '/';
                 break;
         }
     });
