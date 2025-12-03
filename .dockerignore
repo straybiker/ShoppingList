@@ -17,3 +17,6 @@ deployment/
 !README.md
 .DS_Store
 item-content-style.txt
+
+# Ignore data directory
+data/
