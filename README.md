@@ -49,6 +49,15 @@ Legacy URL parameters for user setting (`?user=John`) are still supported for qu
 
 ## Installation & Running
 
+### Getting the Code
+
+Navigate to your desired installation directory (e.g., `/opt` on a server) and clone the repository:
+```bash
+cd /opt
+git clone https://github.com/straybiker/ShoppingList.git
+cd ShoppingList
+```
+
 ### Local Development
 
 1. **Prerequisites**: Ensure Node.js (v18 or higher) is installed.
@@ -70,10 +79,13 @@ Legacy URL parameters for user setting (`?user=John`) are still supported for qu
 This method automatically handles the build and sets up data persistence.
 
 ```bash
-# Build and start the container in the background
+# 1. Get the latest code
+git pull
+
+# 2. Build and start the container in the background
 docker compose up -d --build
 
-# Access the app at http://localhost:8081
+# Access the app at http://localhost:3000
 ```
 
 #### Using Docker CLI
@@ -87,14 +99,41 @@ docker build -t shopping-list .
 docker volume create shopping_list_data
 
 # 3. Run the container
-# - Maps host port 8081 to container port 3000
+# - Maps host port 80 to container port 3000
 # - Mounts the volume to /usr/src/app/data
 docker run -d \
-  -p 8081:3000 \
+  -p 80:3000 \
   -v shopping_list_data:/usr/src/app/data \
-  --name shopping-list-app \
+  --name shopping-list \
   shopping-list
 ```
+
+### Solid Deployment Process (LXC + Portainer)
+
+This process ensures your app is always up-to-date, your data is safe, and Portainer reflects the correct state.
+
+**1. Update Code (via SSH)**
+Connect to your LXC host and pull the latest changes:
+```bash
+cd ShoppingList
+git pull
+```
+
+**2. Build & Deploy (via SSH)**
+Since you are building the image locally, run this command on the LXC host. It handles building the image and recreating the container in one step:
+```bash
+docker compose up -d --build
+```
+
+**3. Portainer Management**
+Portainer will automatically see the updated container. You can use Portainer to:
+- **Monitor logs**: Check for errors.
+- **Restart**: If needed.
+- **Console**: Access the container shell.
+
+**⚠️ IMPORTANT:**
+- **Data Safety**: The `docker-compose.yml` now includes `volumes: - shopping_list_data:/usr/src/app/data`. This guarantees your lists are safe during updates.
+- **Port**: The app is now exposed on **Port 80** of the LXC container.
 
 ## Technologies
 

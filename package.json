@@ -1,5 +1,5 @@
 {
-    "name": "shopping-list-app",
+    "name": "shopping-list",
     "version": "1.0.0",
     "description": "A simple shopping list app with backend",
     "main": "server.js",

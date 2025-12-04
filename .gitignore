@@ -2,8 +2,7 @@ node_modules/
 .DS_Store
 Thumbs.db
 *.log
-data/lists.json
-data/users.json
+data/
 test-results/
 playwright-report/
 blob-report/
