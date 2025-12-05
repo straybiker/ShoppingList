@@ -2,6 +2,8 @@
 
 A modern, real-time shopping list application built with Node.js, Express, and vanilla HTML/CSS/JS.
 
+<img width="256" height="256" alt="shoppinglist_sqr" src="https://github.com/user-attachments/assets/d07dd3c2-c0ea-476c-875d-589a2ac9ec9e" />
+
 ## Features
 
 - **Real-time Synchronization**: Updates appear instantly across all connected devices using Server-Sent Events (SSE).
