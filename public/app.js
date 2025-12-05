@@ -130,6 +130,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     completed: false,
                     amount: null,
                     addedBy: null,
+                    creatorName: list.creatorName,
                     updatedAt: list.updatedAt,
                     itemCount: list.itemCount
                 }));
@@ -230,7 +231,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const response = await fetch('/api/lists', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ displayName: text })
+                    body: JSON.stringify({
+                        displayName: text,
+                        createdBy: userName,
+                        creatorName: displayName
+                    })
                 });
 
                 if (response.ok) {
@@ -656,7 +661,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 let metaText = null;
 
                 if (configMode) {
-                    metaText = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'Never updated';
+                    const dateStr = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'Never updated';
+                    const creatorStr = item.creatorName ? `Created by ${item.creatorName} • ` : '';
+                    metaText = creatorStr + dateStr;
                 } else if (item.authorName) {
                     metaText = item.authorName;
                 } else if (item.addedBy && item.addedBy !== 'Guest') {
@@ -705,7 +712,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 let metaHtml = '';
                 if (configMode) {
                     const dateStr = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'Never updated';
-                    metaHtml = `<span class="item-author" style="text-transform: none;">${escapeHtml(dateStr)}</span>`;
+                    const creatorStr = item.creatorName ? `Created by ${item.creatorName} • ` : '';
+                    metaHtml = `<span class="item-author" style="text-transform: none;">${escapeHtml(creatorStr + dateStr)}</span>`;
                 } else if (item.authorName) {
                     metaHtml = `<span class="item-author">${escapeHtml(item.authorName)}</span>`;
                 } else if (item.addedBy && item.addedBy !== 'Guest') {

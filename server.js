@@ -390,6 +390,8 @@ app.get('/api/lists', async (req, res) => {
             return {
                 name,
                 displayName: value.displayName || name,
+                creatorName: value.creatorName,
+                createdBy: value.createdBy,
                 updatedAt: value.updatedAt,
                 itemCount: value.items.length
             };
@@ -405,7 +407,7 @@ app.get('/api/lists', async (req, res) => {
 app.post('/api/lists', async (req, res) => {
     await dbMutex.run(async () => {
         try {
-            const { displayName } = req.body;
+            const { displayName, createdBy, creatorName } = req.body;
 
             if (!displayName || typeof displayName !== 'string' || displayName.trim() === '') {
                 return res.status(400).json({ error: 'Display name is required' });
@@ -420,6 +422,8 @@ app.post('/api/lists', async (req, res) => {
             data[listId] = {
                 items: [],
                 displayName: safeName,
+                createdBy: createdBy || null,
+                creatorName: creatorName || null,
                 updatedAt: Date.now()
             };
 
