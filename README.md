@@ -1,8 +1,9 @@
-# Shopping List App
+# <img width="56" height="56" alt="shoppinglist_sqr" src="https://github.com/user-attachments/assets/d07dd3c2-c0ea-476c-875d-589a2ac9ec9e" /> Shopping List App
 
 A modern, real-time shopping list application built with Node.js, Express, and vanilla HTML/CSS/JS.
 
-<img width="256" height="256" alt="shoppinglist_sqr" src="https://github.com/user-attachments/assets/d07dd3c2-c0ea-476c-875d-589a2ac9ec9e" />
+<img width="456" height="593" alt="image" src="https://github.com/user-attachments/assets/e1d2063c-fd5a-467d-a5f6-2f1028021607" />
+
 
 ## Features
 
