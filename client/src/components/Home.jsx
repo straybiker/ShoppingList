@@ -131,6 +131,13 @@ export default function Home() {
         const currentId = getListId();
         try {
             const res = await fetch(`${API_URL}/${currentId}`);
+            if (res.status === 404 && currentId !== 'default') {
+                // List deleted or missing, reset to default
+                localStorage.setItem('currentListId', 'default');
+                navigate('/');
+                // Trigger reload to pick up new ID
+                return loadItems();
+            }
             if (res.ok) {
                 const data = await res.json();
                 // simple compare to avoid re-render loop if deep equal? 
@@ -331,23 +338,35 @@ export default function Home() {
         if (configMode === 'lists') {
             if (!confirm('This cannot be undone. Delete list?')) return;
             try {
-                await fetch(`/api/lists/${id}`, { method: 'DELETE' });
+                const res = await fetch(`/api/lists/${encodeURIComponent(id)}`, { method: 'DELETE' });
+                if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.error || 'Failed to delete list');
+                }
                 showToast('List deleted', 'success');
                 loadItems();
-            } catch (e) { showToast('Error deleting list', 'error'); }
+            } catch (e) { showToast(e.message, 'error'); }
             return;
         } else if (configMode === 'users') {
             if (!confirm('Delete user?')) return;
             try {
-                await fetch(`/api/users/${id}`, { method: 'DELETE' });
+                const res = await fetch(`/api/users/${encodeURIComponent(id)}`, { method: 'DELETE' });
+                if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.error || 'Failed to delete user');
+                }
                 showToast('User deleted', 'success');
                 loadItems();
-            } catch (e) { showToast('Error deleting user', 'error'); }
+            } catch (e) { showToast(e.message, 'error'); }
             return;
         }
 
-        await fetch(`${API_URL}/${getListId()}/${id}`, { method: 'DELETE' });
-        loadItems();
+        // Item deletion
+        try {
+            const res = await fetch(`${API_URL}/${getListId()}/${encodeURIComponent(id)}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('Failed to delete item');
+            loadItems();
+        } catch (e) { console.error(e); }
     };
 
     const handleDeleteCompleted = async () => {
@@ -377,12 +396,12 @@ export default function Home() {
         <div className="flex flex-col h-full text-slate-50">
             {/* Header Extension for Config Mode */}
             {configMode && (
-                <div className="text-center mb-4 text-accent font-medium">
+                <div className="text-center mb-2 text-accent font-medium">
                     {configMode === 'lists' ? 'Configuration: Manage Lists' : 'Configuration: Manage Users'}
                 </div>
             )}
             {!configMode && user && (
-                <div className="flex justify-end mb-2 px-1">
+                <div className="flex justify-end mb-1 px-1">
                     <button onClick={handleToggleFavorite} className={`${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-slate-500 hover:text-yellow-400'} transition-colors`}>
                         <Star size={24} fill={isFavorite ? "currentColor" : "none"} />
                     </button>
@@ -390,7 +409,7 @@ export default function Home() {
             )}
 
             {/* Input Area */}
-            <div className="flex gap-3 mb-6">
+            <div className="flex gap-3 mb-2">
                 <input
                     type="text"
                     value={inputText}
@@ -409,13 +428,13 @@ export default function Home() {
             </div>
 
             {/* List Area */}
-            <div className="flex-1 overflow-y-auto min-h-0 pr-1 space-y-3 pb-20 custom-scrollbar">
+            <div className="list-area flex-1 overflow-y-auto min-h-0 relative">
                 {filteredItems.length === 0 ? (
                     <div className="text-center py-10 text-secondary italic">
                         {configMode ? 'No items found' : 'Your list is empty.'}
                     </div>
                 ) : (
-                    <ul className="space-y-3">
+                    <ul className="shopping-list mt-0 pb-4">
                         {filteredItems.map(item => (
                             <ListItem
                                 key={item.id}
@@ -456,27 +475,29 @@ export default function Home() {
             </div>
 
             {/* Footer Controls */}
-            {!configMode && items.length > 0 && (
-                <div className="mt-4 pt-4 flex justify-between items-center">
-                    <div className="flex gap-2">
-                        <button onClick={() => setSortDirection('asc')} className={`px-3 py-2 rounded-xs transition-colors text-sm font-medium shadow-sm ${sortDirection === 'asc' ? 'bg-accent text-white' : 'bg-accent text-white hover:bg-accent-hover'}`}>
-                            A-Z
-                        </button>
-                        <button onClick={() => setSortDirection('desc')} className={`px-3 py-2 rounded-xs transition-colors text-sm font-medium shadow-sm ${sortDirection === 'desc' ? 'bg-accent text-white' : 'bg-accent text-white hover:bg-accent-hover'}`}>
-                            Z-A
-                        </button>
-                    </div>
+            {
+                !configMode && items.length > 0 && (
+                    <div className="mt-4 pt-4 flex justify-between items-center">
+                        <div className="flex gap-2">
+                            <button onClick={() => setSortDirection('asc')} className={`px-3 py-2 rounded-xs transition-colors text-sm font-medium shadow-sm ${sortDirection === 'asc' ? 'bg-accent text-white' : 'bg-accent text-white hover:bg-accent-hover'}`}>
+                                A-Z
+                            </button>
+                            <button onClick={() => setSortDirection('desc')} className={`px-3 py-2 rounded-xs transition-colors text-sm font-medium shadow-sm ${sortDirection === 'desc' ? 'bg-accent text-white' : 'bg-accent text-white hover:bg-accent-hover'}`}>
+                                Z-A
+                            </button>
+                        </div>
 
-                    {hasCompleted && (
-                        <button
-                            onClick={handleDeleteCompleted}
-                            className="px-3 py-2 bg-danger hover:bg-red-700 text-white rounded-xs text-sm font-medium transition-colors shadow-sm"
-                        >
-                            Delete completed
-                        </button>
-                    )}
-                </div>
-            )}
-        </div>
+                        {hasCompleted && (
+                            <button
+                                onClick={handleDeleteCompleted}
+                                className="px-3 py-2 bg-danger hover:bg-red-700 text-white rounded-xs text-sm font-medium transition-colors shadow-sm"
+                            >
+                                Delete completed
+                            </button>
+                        )}
+                    </div>
+                )
+            }
+        </div >
     );
 }

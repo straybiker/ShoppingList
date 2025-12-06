@@ -21,7 +21,11 @@ function Header() {
 
       <div className="title-container">
         <h1>Shopping List</h1>
-        <p className="subtitle">Stay organized, buy smart.</p>
+        <p className="subtitle">
+          {location.pathname === '/config-lists' ? 'Configuration: Manage Lists' :
+            location.pathname === '/config-users' ? 'Configuration: Manage Users' :
+              'Stay organized, buy smart.'}
+        </p>
       </div>
 
       <div className="header-right">

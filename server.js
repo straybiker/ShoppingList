@@ -53,8 +53,12 @@ function rateLimiter(req, res, next) {
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static('public'));
+// app.use(express.static('public')); // Legacy static file serving removed
 app.use('/api', rateLimiter); // Apply rate limiting to API routes
+
+// ... (rest of the file)
+// Note: We are removing the catch-all route to avoid conflicts with frontend routing in dev
+// app.get('*', ...);
 
 // Ensure data directory exists
 async function ensureDataDir() {
@@ -697,9 +701,9 @@ app.delete('/api/items/:listId/:itemId', async (req, res) => {
     });
 });
 
-// Serve index.html for all other routes (SPA support)
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+// API Root
+app.get('/', (req, res) => {
+    res.json({ message: 'Shopping List API is running' });
 });
 
 // Initialize and start server

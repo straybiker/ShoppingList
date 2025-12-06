@@ -75,7 +75,7 @@
     max-width: 480px;
     min-height: 100vh;
     /* Added padding bottom to ensure last item is visible above any potential bottom UI or browser chrome */
-    padding: 24px;
+    padding: 16px;
     padding-bottom: 40px;
     margin: 0 auto;
     display: flex;
@@ -87,7 +87,7 @@
     display: grid;
     grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    margin-bottom: 12px;
+    margin-bottom: 4px;
     padding: 0 4px;
 }
 
@@ -142,7 +142,7 @@
 
 /* Input Area */
 .input-area {
-    margin-bottom: 20px;
+    margin-bottom: 10px;
 }
 
 .input-wrapper {
@@ -246,7 +246,7 @@ input[type="text"]::placeholder {
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
     padding: 0;
 }
 
@@ -358,6 +358,7 @@ input[type="text"]::placeholder {
     display: flex;
     align-items: center;
     gap: 12px;
+    flex-shrink: 0;
 }
 
 .qty-controls {

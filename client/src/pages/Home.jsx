@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
 import ListItem from '../components/ListItem';
 import { Plus, Star } from 'lucide-react';
@@ -11,7 +11,18 @@ export default function Home() {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [inputText, setInputText] = useState('');
-    const [configMode, setConfigMode] = useState(null);
+    const location = useLocation();
+    const [configMode, setConfigMode] = useState(() => {
+        if (location.pathname === '/config-lists') return 'lists';
+        if (location.pathname === '/config-users') return 'users';
+        return null;
+    });
+
+    useEffect(() => {
+        if (location.pathname === '/config-lists') setConfigMode('lists');
+        else if (location.pathname === '/config-users') setConfigMode('users');
+        else setConfigMode(null);
+    }, [location.pathname]);
     const [sortDirection, setSortDirection] = useState(null);
 
     const [previousListId, setPreviousListId] = useState(null);
@@ -151,17 +162,15 @@ export default function Home() {
                 const currentId = getListId();
                 setPreviousListId(currentId);
                 setPreviousListName(localStorage.getItem('currentListName') || currentId);
-                setConfigMode('lists');
+                navigate('/config-lists'); // Update URL to trigger App header and Home useEffect
                 setInputText('');
-                loadItems();
                 return;
             } else if (text === '/config-users') {
                 const currentId = getListId();
                 setPreviousListId(currentId);
                 setPreviousListName(localStorage.getItem('currentListName') || currentId);
-                setConfigMode('users');
+                navigate('/config-users'); // Update URL
                 setInputText('');
-                loadItems();
                 return;
             } else {
                 showToast('Unknown command', 'error');
@@ -256,23 +265,30 @@ export default function Home() {
 
     const handleDelete = async (id) => {
         if (configMode === 'lists') {
-            if (!confirm('This cannot be undone. Delete list?')) return;
             try {
-                await fetch(`/api/lists/${id}`, { method: 'DELETE' });
-                showToast('List deleted', 'success');
+                const res = await fetch(`/api/lists/${id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error(res.statusText);
+                showToast('List deleted successfully', 'success');
                 loadItems();
-            } catch (e) { showToast('Error deleting list', 'error'); }
+            } catch (e) {
+                console.error(e);
+                showToast('Error deleting list', 'error');
+            }
             return;
         } else if (configMode === 'users') {
-            if (!confirm('Delete user?')) return;
             try {
-                await fetch(`/api/users/${id}`, { method: 'DELETE' });
-                showToast('User deleted', 'success');
+                const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error(res.statusText);
+                showToast('User deleted successfully', 'success');
                 loadItems();
-            } catch (e) { showToast('Error deleting user', 'error'); }
+            } catch (e) {
+                console.error(e);
+                showToast('Error deleting user', 'error');
+            }
             return;
         }
 
+        // Normal item deletion
         await fetch(`${API_URL}/${getListId()}/${id}`, { method: 'DELETE' });
         loadItems();
     };
@@ -302,11 +318,7 @@ export default function Home() {
 
     return (
         <>
-            {configMode && (
-                <div className="text-center mb-4 text-accent font-medium">
-                    {configMode === 'lists' ? 'Configuration: Manage Lists' : 'Configuration: Manage Users'}
-                </div>
-            )}
+            {/* Config banner removed, moved to header subtitle */}
             {!configMode && user && (
                 <div className="flex justify-end mb-2 px-1">
                     <button onClick={handleToggleFavorite} className={`icon-btn ${isFavorite ? 'text-yellow-400' : ''}`} style={{ marginBottom: 0 }}>
@@ -367,21 +379,7 @@ export default function Home() {
                     </ul>
                 )}
 
-                {configMode && (
-                    <div className="mt-6 flex justify-center">
-                        <button
-                            onClick={() => {
-                                setConfigMode(null);
-                                localStorage.setItem('currentListId', previousListId || 'default');
-                                window.location.reload();
-                            }}
-                            className="btn-primary w-full"
-                            style={{ width: '100%', borderRadius: '4px' }}
-                        >
-                            Return to {previousListName || 'List'}
-                        </button>
-                    </div>
-                )}
+                {/* Return button removed as per user request */}
 
                 {!configMode && items.length > 0 && (
                     <div id="list-controls" className="list-controls">
