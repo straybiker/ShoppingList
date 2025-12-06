@@ -29,10 +29,8 @@
         background-color: var(--bg-color);
         color: var(--text-primary);
         min-height: 100vh;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        overflow: hidden;
+        /* Remved flex centering to avoid clipping on overflow, using margin: auto on container instead */
+        overflow-y: auto;
         margin: 0;
     }
 }
@@ -75,10 +73,11 @@
 .app-container {
     width: 100%;
     max-width: 480px;
-    height: 100vh;
-    /* Changed to 100vh to fill screen like legacy */
-    margin: 0 auto;
+    min-height: 100vh;
+    /* Added padding bottom to ensure last item is visible above any potential bottom UI or browser chrome */
     padding: 24px;
+    padding-bottom: 40px;
+    margin: 0 auto;
     display: flex;
     flex-direction: column;
 }
@@ -225,12 +224,7 @@ input[type="text"]::placeholder {
 
 /* List Area */
 .list-area {
-    flex: 1;
-    overflow-y: auto;
-    min-height: 0;
-    padding-right: 4px;
-    scrollbar-width: thin;
-    scrollbar-color: rgba(148, 163, 184, 0.2) transparent;
+    width: 100%;
     display: flex;
     flex-direction: column;
 }
@@ -292,6 +286,10 @@ input[type="text"]::placeholder {
 .checkbox {
     width: 24px;
     height: 24px;
+    min-width: 24px;
+    /* Added min-width for extra safety */
+    flex-shrink: 0;
+    /* Prevent shrinking */
     border: 2px solid var(--glass-border);
     border-radius: 50%;
     cursor: pointer;
@@ -326,24 +324,33 @@ input[type="text"]::placeholder {
 }
 
 .item-author {
-    font-size: 0.7rem;
+    font-size: 0.6rem;
     color: var(--text-secondary);
     font-weight: 600;
     margin-bottom: 2px;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    opacity: 0.7;
 }
 
 .item-text {
     color: var(--text-primary);
     font-size: 1rem;
     line-height: 1.4;
-    word-break: break-word;
+    word-break: normal;
+    overflow-wrap: anywhere;
+    hyphens: auto;
+    width: 100%;
 }
 
 .list-item.completed .item-text {
     text-decoration: line-through;
     color: var(--text-secondary);
+}
+
+.list-item.completed {
+    background: rgba(255, 255, 255, 0.1);
+    /* Lighter background as per screenshot */
 }
 
 /* Item Actions/Buttons */

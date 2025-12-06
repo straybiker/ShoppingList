@@ -697,8 +697,8 @@ app.delete('/api/items/:listId/:itemId', async (req, res) => {
     });
 });
 
-// Serve index.html for root
-app.get('/', (req, res) => {
+// Serve index.html for all other routes (SPA support)
+app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 

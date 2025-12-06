@@ -61,6 +61,8 @@ function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/config-lists" element={<Home />} />
+            <Route path="/config-users" element={<Home />} />
           </Routes>
         </Layout>
       </Router>

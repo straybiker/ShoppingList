@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
 import ListItem from '../components/ListItem';
 import { Plus, ArrowDownAZ, ArrowUpZA, Trash2, RotateCcw, Star } from 'lucide-react';
@@ -12,7 +12,12 @@ export default function Home() {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [inputText, setInputText] = useState('');
-    const [configMode, setConfigMode] = useState(null); // 'lists' | 'users' | null
+    const [configMode, setConfigMode] = useState(() => {
+        if (location.pathname === '/config-lists') return 'lists';
+        if (location.pathname === '/config-users') return 'users';
+        return null;
+    }); // 'lists' | 'users' | null
+
     const [sortDirection, setSortDirection] = useState(null); // 'asc' | 'desc'
 
     // State for "Return" functionality in config mode
@@ -24,6 +29,7 @@ export default function Home() {
     // Router
     const [searchParams, setSearchParams] = useSearchParams();
     const navigate = useNavigate();
+    const location = useLocation(); // Add useLocation`
     const { showToast } = useToast();
 
     // Determine current List ID
@@ -54,6 +60,31 @@ export default function Home() {
             setSearchParams({});
         }
     }, [searchParams, setSearchParams]);
+
+    // Handle Route-based Config Mode
+    useEffect(() => {
+        if (location.pathname === '/config-lists') {
+            setConfigMode('lists');
+            // Ensure we have previous list state if navigating directly
+            if (!previousListId) {
+                const storedId = localStorage.getItem('currentListId') || 'default';
+                setPreviousListId(storedId);
+                setPreviousListName(localStorage.getItem('currentListName') || storedId);
+            }
+        } else if (location.pathname === '/config-users') {
+            setConfigMode('users');
+            if (!previousListId) {
+                const storedId = localStorage.getItem('currentListId') || 'default';
+                setPreviousListId(storedId);
+                setPreviousListName(localStorage.getItem('currentListName') || storedId);
+            }
+        } else if (location.pathname === '/') {
+            // Only reset if we were in a config mode and navigated back to root
+            // But we handle explicit "Return" via state reset.
+            // If user hits Back button, this ensures we exit config mode.
+            if (configMode) setConfigMode(null);
+        }
+    }, [location.pathname]);
 
     // Load Items
     const loadItems = useCallback(async () => {
