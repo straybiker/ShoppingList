@@ -72,14 +72,15 @@ function Header() {
     return null;
   };
 
-  const showProfileIcon = location.pathname === '/' && !listDetails;
-  const showBackButton = location.pathname === '/profile' || !!listDetails;
-
   const isDashboard = location.pathname === '/' && !listDetails;
   const isProfile = location.pathname === '/profile';
+  const isConfig = location.pathname.startsWith('/config');
+
+  const showProfileIcon = location.pathname === '/' && !listDetails;
+  const showBackButton = location.pathname === '/profile' || !!listDetails || isConfig;
 
   let headerClass = 'header-list';
-  if (isDashboard) headerClass = 'header-dashboard';
+  if (isDashboard || isConfig) headerClass = 'header-dashboard';
   if (isProfile) headerClass = 'header-profile';
 
   return (

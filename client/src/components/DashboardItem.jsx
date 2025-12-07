@@ -59,7 +59,7 @@ export default function DashboardItem({ list, onOpen, onShare, onToggleFav, onDe
             position: 'relative',
             overflow: 'hidden',
             borderRadius: 'var(--radius-md)',
-            marginBottom: '10px',
+            marginBottom: 0,
             touchAction: 'pan-y',
             userSelect: 'none'
         }}
@@ -123,7 +123,7 @@ export default function DashboardItem({ list, onOpen, onShare, onToggleFav, onDe
                     </div>
                 </div>
 
-                <div className="item-actions">
+                <div className="item-actions" onPointerDown={(e) => e.stopPropagation()}>
                     <button onClick={(e) => { e.stopPropagation(); onShare(list.name); }} className="delete-btn" style={{ color: 'var(--text-secondary)' }}>
                         <Share2 size={18} />
                     </button>

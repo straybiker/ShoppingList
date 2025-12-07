@@ -1,15 +1,16 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
 import ListItem from '../components/ListItem';
-import { Plus, Star, ArrowRight } from 'lucide-react';
+import { Plus, Star, ArrowRight, ChevronLeft } from 'lucide-react';
 import DashboardItem from '../components/DashboardItem';
+import { processSlashCommand } from '../utils/slashCommands';
 
 
 const API_URL = '/api/items';
 
 export default function Home() {
+    // 1. State Hooks
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
     const [inputText, setInputText] = useState('');
@@ -19,48 +20,31 @@ export default function Home() {
         if (location.pathname === '/config-users') return 'users';
         return null;
     });
-
-    useEffect(() => {
-        if (location.pathname === '/config-lists') setConfigMode('lists');
-        else if (location.pathname === '/config-users') setConfigMode('users');
-        else setConfigMode(null);
-    }, [location.pathname]);
     const [sortDirection, setSortDirection] = useState(null);
-
     const [previousListId, setPreviousListId] = useState(null);
     const [previousListName, setPreviousListName] = useState(null);
-
     const [isFavorite, setIsFavorite] = useState(false);
+    const [favorites, setFavorites] = useState([]);
+    const [newListName, setNewListName] = useState('');
 
+    // 2. Router/Context Hooks
     const [searchParams, setSearchParams] = useSearchParams();
     const navigate = useNavigate();
     const { showToast } = useToast();
 
+    const user = localStorage.getItem('username');
+
+    // 3. Derived State / Constants
     const getListId = useCallback(() => {
         return searchParams.get('list');
     }, [searchParams]);
 
     const listId = configMode === 'lists' || configMode === 'users' ? null : getListId();
-    const user = localStorage.getItem('username');
 
-    useEffect(() => {
-        const urlList = searchParams.get('list');
-        const urlUser = searchParams.get('user');
+    // 4. Core Logic Helpers (defined early for dependencies)
 
-        if (urlList) localStorage.setItem('currentListId', urlList);
-        if (urlUser) localStorage.setItem('username', urlUser);
-
-        // DO NOT clear searchParams for list, we need it to stay on the URL
-        if (urlUser) setSearchParams({ list: urlList });
-
-        if (!urlList && !configMode && user) {
-            loadFavorites(user);
-        }
-    }, [searchParams, setSearchParams, configMode, user]);
-
+    // loadItems definition
     const loadItems = useCallback(async () => {
-        // ... same logic as before, omitting to save space if logic matches, but writing full file so:
-
         if (configMode === 'lists') {
             try {
                 const res = await fetch(`/api/lists?t=${Date.now()}`);
@@ -111,29 +95,60 @@ export default function Home() {
                     const isDiff = JSON.stringify(prev) !== JSON.stringify(data);
                     return isDiff ? data : prev;
                 });
-                // Update local storage name for Header access? 
-                // Better: Update state or rely on App.jsx fetching it?
-                // For now, let's set it in localStorage so App header might ensure it's synced if it reads it.
-                if (data.length > 0 && data[0].displayName) { // This logic assumes list items carry list metadata? NO.
-                    // The API returns items. It does NOT return list metadata in this endpoint usually?
-                    // Wait, checking server.js... GET /api/items/:listId returns items array.
-                    // It does NOT return list name. 
-                    // The list name is usually embedded in items? 
-                    // server.js: 
-                    // app.get('/api/items/:listId', ...) -> returns FilteredItems.
-                    // Item has `listId` but maybe not name.
-                    // So how did we get list name before? 
-                    // input text was list name in create.
-                    // When opening list, we set currentListName.
+
+                if (data.length > 0 && data[0].displayName) {
+                    // Logic for list name updates if needed
                 }
-                checkFavoriteStatus(currentId);
+                // Call checkFavoriteStatus here, but it's defined later. 
+                // To avoid hoisting issues, we can extract checkFavorite logic or just call it if available.
+                // Or define checkFavoriteStatus BEFORE loadItems.
             }
         } catch (e) { console.error(e); }
     }, [getListId, configMode]);
 
-    const [favorites, setFavorites] = useState([]);
-    const [newListName, setNewListName] = useState('');
+    // To fix the checkFavoriteStatus dependency in loadItems, we'll define it inside or move it up.
+    // It uses `user`, `getListId`. 
+    // Let's define it here.
+    const checkFavoriteStatus = async (lid) => {
+        if (!user) {
+            setIsFavorite(false);
+            return;
+        }
+        try {
+            const res = await fetch(`/api/favorites/${user}`);
+            if (res.ok) {
+                const favs = await res.json();
+                setIsFavorite(favs.includes(lid));
+            }
+        } catch (e) { }
+    };
 
+    // We need to call checkFavoriteStatus in loadItems? The original code called it.
+    // So we should add it to the useEffect or ensure it's called.
+    // Original code had `checkFavoriteStatus(currentId)` inside `loadItems`.
+    // Let's rely on the useEffect for checking status or accept that we call it here.
+    // If I call checkFavoriteStatus inside loadItems, I need to add it to dependencies.
+
+    // 5. Slash Command Helpers
+    const saveCurrentListState = useCallback(() => {
+        const currentId = getListId();
+        setPreviousListId(currentId);
+        setPreviousListName(localStorage.getItem('currentListName') || currentId);
+    }, [getListId]);
+
+    const handleClearList = async () => {
+        await fetch(`${API_URL}/${getListId()}`, { method: 'DELETE' });
+        loadItems();
+        showToast('List cleared', 'success');
+    };
+
+    const slashCommandContext = {
+        clearCache: handleClearList,
+        saveCurrentListState,
+        showToast
+    };
+
+    // 6. Other Helpers
     const loadFavorites = useCallback(async (u) => {
         if (!u) return;
         try {
@@ -150,11 +165,51 @@ export default function Home() {
         } catch (e) { console.error(e); }
     }, []);
 
+    // 7. Effects
+    useEffect(() => {
+        if (location.pathname === '/config-lists') setConfigMode('lists');
+        else if (location.pathname === '/config-users') setConfigMode('users');
+        else setConfigMode(null);
+    }, [location.pathname]);
+
+    useEffect(() => {
+        const urlList = searchParams.get('list');
+        const urlUser = searchParams.get('user');
+
+        if (urlList) localStorage.setItem('currentListId', urlList);
+        if (urlUser) localStorage.setItem('username', urlUser);
+
+        if (urlUser) setSearchParams({ list: urlList });
+
+        if (!urlList && !configMode && user) {
+            loadFavorites(user);
+        }
+    }, [searchParams, setSearchParams, configMode, user, loadFavorites]);
+
+    useEffect(() => {
+        loadItems();
+        setLoading(false);
+        const currentId = getListId();
+        if (currentId) checkFavoriteStatus(currentId);
+
+        const eventSource = new EventSource('/api/events');
+        eventSource.onmessage = (e) => {
+            const data = JSON.parse(e.data);
+            if (data.type === 'update') {
+                loadItems();
+                if (currentId) checkFavoriteStatus(currentId);
+            }
+        };
+        eventSource.onerror = () => eventSource.close();
+        return () => eventSource.close();
+    }, [loadItems, getListId]);
+
+
+    // 8. Handlers
     const handleCreateNewList = async () => {
         if (!newListName.trim()) return;
         if (!user) { showToast('Please login first', 'error'); return; }
         try {
-            // Create List
             const res = await fetch('/api/lists', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -166,22 +221,27 @@ export default function Home() {
             });
             if (res.ok) {
                 const data = await res.json();
-                // Auto-favorite
                 await fetch(`/api/favorites/${user}/${data.listId}`, { method: 'POST' });
                 setNewListName('');
-                // Navigate to list
-                localStorage.setItem('currentListName', newListName); // Store for header
+                localStorage.setItem('currentListName', newListName);
                 navigate(`/?list=${data.listId}`);
             }
         } catch (e) { showToast('Error creating list', 'error'); }
     };
 
-    // Toggle Fav from Dashboard
     const toggleFavDashboard = async (lid) => {
         try {
-            await fetch(`/api/favorites/${user}/${lid}`, { method: 'POST' });
-            loadFavorites(user);
-        } catch (e) { }
+            const res = await fetch(`/api/favorites/${user}/${lid}`, { method: 'POST' });
+            if (res.ok) {
+                await loadFavorites(user);
+                showToast('List removed from favorites', 'success');
+            } else {
+                showToast('Failed to remove favorite', 'error');
+            }
+        } catch (e) {
+            console.error(e);
+            showToast('Error removing favorite', 'error');
+        }
     };
 
     const deleteListDashboard = async (lid) => {
@@ -197,7 +257,7 @@ export default function Home() {
         if (navigator.share) {
             try {
                 await navigator.share({
-                    title: `Shopping List`, // access name if possible, or just generic
+                    title: `Shopping List`,
                     url: shareUrl
                 });
             } catch (err) {
@@ -209,33 +269,6 @@ export default function Home() {
                 showToast('Link copied to clipboard', 'success');
             } catch (e) { showToast('Failed to copy', 'error'); }
         }
-    };
-
-    useEffect(() => {
-        loadItems();
-        setLoading(false);
-
-        const eventSource = new EventSource('/api/events');
-        eventSource.onmessage = (e) => {
-            const data = JSON.parse(e.data);
-            if (data.type === 'update') loadItems();
-        };
-        eventSource.onerror = () => eventSource.close();
-        return () => eventSource.close();
-    }, [loadItems]);
-
-    const checkFavoriteStatus = async (lid) => {
-        if (!user) {
-            setIsFavorite(false);
-            return;
-        }
-        try {
-            const res = await fetch(`/api/favorites/${user}`);
-            if (res.ok) {
-                const favs = await res.json();
-                setIsFavorite(favs.includes(lid));
-            }
-        } catch (e) { }
     };
 
     const handleToggleFavorite = async () => {
@@ -259,26 +292,9 @@ export default function Home() {
         if (!text) return;
 
         if (text.startsWith('/')) {
-            if (text === '/clear-cache') {
-                await handleClearList();
+            const handled = await processSlashCommand(text, navigate, slashCommandContext);
+            if (handled) {
                 setInputText('');
-                return;
-            } else if (text === '/config-lists') {
-                const currentId = getListId();
-                setPreviousListId(currentId);
-                setPreviousListName(localStorage.getItem('currentListName') || currentId);
-                navigate('/config-lists'); // Update URL to trigger App header and Home useEffect
-                setInputText('');
-                return;
-            } else if (text === '/config-users') {
-                const currentId = getListId();
-                setPreviousListId(currentId);
-                setPreviousListName(localStorage.getItem('currentListName') || currentId);
-                navigate('/config-users'); // Update URL
-                setInputText('');
-                return;
-            } else {
-                showToast('Unknown command', 'error');
                 return;
             }
         }
@@ -393,7 +409,6 @@ export default function Home() {
             return;
         }
 
-        // Normal item deletion
         await fetch(`${API_URL}/${getListId()}/${id}`, { method: 'DELETE' });
         loadItems();
     };
@@ -403,11 +418,6 @@ export default function Home() {
         loadItems();
     };
 
-    const handleClearList = async () => {
-        await fetch(`${API_URL}/${getListId()}`, { method: 'DELETE' });
-        loadItems();
-        showToast('List cleared', 'success');
-    };
 
     const sortItems = () => {
         if (!sortDirection) return items;
@@ -421,6 +431,7 @@ export default function Home() {
     const filteredItems = sortItems();
     const hasCompleted = items.some(i => i.completed);
 
+    // 9. Render
     return (
         <>
             {/* Dashboard View (No List ID and not config) */}
@@ -434,7 +445,18 @@ export default function Home() {
                                 type="text"
                                 value={newListName}
                                 onChange={(e) => setNewListName(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleCreateNewList()}
+                                onKeyDown={async (e) => {
+                                    if (e.key === 'Enter') {
+                                        if (newListName.startsWith('/')) {
+                                            const handled = await processSlashCommand(newListName, navigate, slashCommandContext);
+                                            if (handled) {
+                                                setNewListName('');
+                                                return;
+                                            }
+                                        }
+                                        handleCreateNewList();
+                                    }
+                                }}
                                 placeholder="Create a new list ..."
                                 autoComplete="off"
                             />
@@ -477,6 +499,8 @@ export default function Home() {
             {/* List View (If listId exists) OR Config Mode */}
             {(listId || configMode) && (
                 <>
+
+
                     {/* Input Area */}
                     <section className="input-area">
                         <div className="input-wrapper">

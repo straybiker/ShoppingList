@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useToast } from '../context/ToastContext';
 import { useNavigate } from 'react-router-dom';
+import { processSlashCommand } from '../utils/slashCommands';
 
 export default function Profile() {
     const [username, setUsername] = useState('');
@@ -59,6 +60,19 @@ export default function Profile() {
         navigate('/');
     };
 
+    const handleSlashKeyDown = async (e, setValue) => {
+        if (e.key === 'Enter') {
+            const val = e.target.value;
+            if (val.startsWith('/')) {
+                e.preventDefault();
+                const handled = await processSlashCommand(val, navigate, { showToast });
+                if (handled) {
+                    setValue('');
+                }
+            }
+        }
+    };
+
     return (
         <div style={{ width: '100%' }}>
             <form onSubmit={handleSaveProfile} className="space-y-6">
@@ -69,6 +83,7 @@ export default function Profile() {
                         id="username"
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
+                        onKeyDown={(e) => handleSlashKeyDown(e, setUsername)}
                         placeholder="e.g., johndoe"
                         required
                         autoComplete="off"
@@ -83,6 +98,7 @@ export default function Profile() {
                         id="display-name"
                         value={displayName}
                         onChange={(e) => setDisplayName(e.target.value)}
+                        onKeyDown={(e) => handleSlashKeyDown(e, setDisplayName)}
                         placeholder="e.g., John D."
                         autoComplete="off"
                         style={{ width: '100%', boxSizing: 'border-box' }}

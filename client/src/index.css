@@ -108,7 +108,8 @@
     margin-bottom: 8px;
 }
 
-.header-dashboard .title-container {
+.header-dashboard .title-container,
+.header-profile .title-container {
     justify-content: center;
     text-align: center;
 }
@@ -122,15 +123,14 @@
     margin-bottom: 12px;
 }
 
-.header-list .title-container,
-.header-profile .title-container {
+.header-list .title-container {
     justify-content: flex-start;
     padding-left: 0;
 }
 
 /* Profile Header */
 .header-profile {
-    grid-template-columns: auto 1fr 40px;
+    grid-template-columns: 40px 1fr 40px;
     column-gap: 4px;
     margin-bottom: 24px;
 }
@@ -326,7 +326,7 @@ input[type="text"]::placeholder {
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 8px;
     padding: 0;
 }
 
