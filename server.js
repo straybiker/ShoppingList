@@ -53,7 +53,7 @@ function rateLimiter(req, res, next) {
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
-// app.use(express.static('public')); // Legacy static file serving removed
+app.use(express.static('public')); // Serve built React client
 app.use('/api', rateLimiter); // Apply rate limiting to API routes
 
 // ... (rest of the file)
@@ -702,8 +702,13 @@ app.delete('/api/items/:listId/:itemId', async (req, res) => {
 });
 
 // API Root
-app.get('/', (req, res) => {
+app.get('/api', (req, res) => {
     res.json({ message: 'Shopping List API is running' });
+});
+
+// SPA Fallback: Serve index.html for any unknown routes (non-API)
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 // Initialize and start server

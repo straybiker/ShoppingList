@@ -5,16 +5,14 @@ services:
     build: .
     image: shopping-list:latest
     container_name: shopping-list
-    # Map Port 80 (Host) to 3000 (Container)
+    restart: unless-stopped
     ports:
       - "80:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
-    # Persist data in a named volume
     volumes:
       - shopping_list_data:/usr/src/app/data
-    restart: unless-stopped
     pull_policy: build
 
 volumes:
