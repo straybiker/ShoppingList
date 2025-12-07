@@ -8,8 +8,8 @@
     --bg-color: #0f172a;
     --text-primary: #f8fafc;
     --text-secondary: #94a3b8;
-    --accent-color: #38bdf8;
-    --accent-hover: #0ea5e9;
+    --accent-color: #60a5fa;
+    --accent-hover: #3b82f6;
     --danger-color: #ef4444;
     --success-color: #22c55e;
     --glass-bg: rgba(30, 41, 59, 0.7);
@@ -92,40 +92,107 @@
 }
 
 /* Header */
+/* Header */
 .app-header {
     display: grid;
-    grid-template-columns: 1fr auto 1fr;
+    grid-template-columns: 40px 1fr 40px;
+    /* Equal sides for true centering */
     align-items: center;
-    margin-bottom: 4px;
     padding: 0 4px;
+    padding-top: env(safe-area-inset-top, 16px);
+    column-gap: 8px;
+}
+
+/* Dashboard Header: Centered */
+.header-dashboard {
+    margin-bottom: 8px;
+}
+
+.header-dashboard .title-container {
+    justify-content: center;
+    text-align: center;
+}
+
+/* List Header: Hybrid Grid (Shrink left col for close grouping) */
+.header-list {
+    grid-template-columns: auto 1fr 40px;
+    /* Left col shrinks to fit Back button */
+    column-gap: 4px;
+    /* Tight gap between Back and Title */
+    margin-bottom: 12px;
+}
+
+.header-list .title-container,
+.header-profile .title-container {
+    justify-content: flex-start;
+    padding-left: 0;
+}
+
+/* Profile Header */
+.header-profile {
+    grid-template-columns: auto 1fr 40px;
+    column-gap: 4px;
+    margin-bottom: 24px;
+}
+
+/* Ensure Back button (in header-left) is aligned */
+.header-left {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 48px;
+    /* Force match with title container */
 }
 
 .title-container {
     grid-column: 2;
-    text-align: center;
+    display: flex;
+    flex-direction: column;
+    /* Stack Title + Subtitle */
+    justify-content: center;
+    min-height: 48px;
+    /* Ensure minimum height matches */
 }
 
 .header-right {
     grid-column: 3;
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
+    align-items: center;
+    height: 40px;
 }
 
 .app-header h1 {
-    font-size: 2rem;
+    font-size: 1.75rem;
+    /* Restored to larger size */
     font-weight: 700;
-    letter-spacing: -0.02em;
-    background: linear-gradient(135deg, #fff 0%, #94a3b8 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    margin-bottom: 4px;
+    color: var(--text-primary);
+    margin: 0;
+    padding: 0;
+    line-height: 1;
+}
+
+/* Perfect vertical centering for List header */
+.header-list .title-container {
+    flex-direction: row;
+    /* Override column - no subtitle on list pages */
+    align-items: center;
+    height: 48px;
+    /* Match header-left height exactly */
+    min-height: unset;
+}
+
+.header-list h1 {
+    line-height: 48px;
+    /* Match container height for perfect vertical centering */
 }
 
 .subtitle {
+    font-size: 0.85rem;
     color: var(--text-secondary);
-    font-size: 0.95rem;
+    margin: 4px 0 0 0;
+    padding: 0;
+    line-height: 1.2;
 }
 
 .icon-btn {
@@ -182,7 +249,7 @@ input[type="text"] {
 
 input[type="text"]:focus {
     border-color: var(--accent-color);
-    box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+    box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.2);
 }
 
 input[type="text"]::placeholder {
@@ -273,6 +340,9 @@ input[type="text"]::placeholder {
     justify-content: space-between;
     gap: 12px;
     transition: var(--transition-medium);
+}
+
+.list-item-container {
     animation: fadeIn 0.3s ease-out;
 }
 
@@ -314,7 +384,7 @@ input[type="text"]::placeholder {
 
 .checkbox:hover {
     border-color: var(--accent-color);
-    background: rgba(56, 189, 248, 0.1);
+    background: rgba(96, 165, 250, 0.1);
 }
 
 .list-item.completed .checkbox {
@@ -389,9 +459,9 @@ input[type="text"]::placeholder {
 }
 
 .qty-btn {
-    background: var(--accent-color);
-    border: none;
-    color: #fff;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
     width: 32px;
     height: 32px;
     display: flex;
@@ -400,13 +470,13 @@ input[type="text"]::placeholder {
     cursor: pointer;
     border-radius: var(--radius-xs);
     transition: var(--transition-fast);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     font-size: 1.2rem;
 }
 
 .qty-btn:hover {
-    background: var(--accent-hover);
-    transform: translateY(-1px);
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
 }
 
 .delete-btn {
@@ -453,11 +523,14 @@ input[type="text"]::placeholder {
     font-size: 0.9rem;
     transition: var(--transition-fast);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    background-image: none;
+    /* Ensure no gradient */
 }
 
 .sort-btn:hover {
     background: var(--accent-hover);
     transform: translateY(-1px);
+    background-image: none;
 }
 
 #delete-completed-btn {

@@ -393,23 +393,17 @@ export default function Home() {
     const hasCompleted = items.some(i => i.completed);
 
     return (
-        <div className="flex flex-col h-full text-slate-50">
+        <div className="flex flex-col h-full text-slate-50" style={{ position: 'relative' }}>
             {/* Header Extension for Config Mode */}
             {configMode && (
                 <div className="text-center mb-2 text-accent font-medium">
                     {configMode === 'lists' ? 'Configuration: Manage Lists' : 'Configuration: Manage Users'}
                 </div>
             )}
-            {!configMode && user && (
-                <div className="flex justify-end mb-1 px-1">
-                    <button onClick={handleToggleFavorite} className={`${isFavorite ? 'text-yellow-400 fill-yellow-400' : 'text-slate-500 hover:text-yellow-400'} transition-colors`}>
-                        <Star size={24} fill={isFavorite ? "currentColor" : "none"} />
-                    </button>
-                </div>
-            )}
+
 
             {/* Input Area */}
-            <div className="flex gap-3 mb-2">
+            <div className="flex gap-3 mb-2 w-full">
                 <input
                     type="text"
                     value={inputText}
