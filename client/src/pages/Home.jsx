@@ -3,7 +3,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import { useToast } from '../context/ToastContext';
 import ListItem from '../components/ListItem';
-import { Plus, Star, StarOff, Trash2, ArrowRight } from 'lucide-react';
+import { Plus, Star, ArrowRight } from 'lucide-react';
+import DashboardItem from '../components/DashboardItem';
+
 
 const API_URL = '/api/items';
 
@@ -188,6 +190,25 @@ export default function Home() {
             loadFavorites(user);
             showToast('List deleted', 'success');
         } catch (e) { }
+    };
+
+    const handleShareList = async (listId) => {
+        const shareUrl = `${window.location.origin}/?list=${listId}`;
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: `Shopping List`, // access name if possible, or just generic
+                    url: shareUrl
+                });
+            } catch (err) {
+                if (err.name !== 'AbortError') console.error(err);
+            }
+        } else {
+            try {
+                await navigator.clipboard.writeText(shareUrl);
+                showToast('Link copied to clipboard', 'success');
+            } catch (e) { showToast('Failed to copy', 'error'); }
+        }
     };
 
     useEffect(() => {
@@ -435,35 +456,17 @@ export default function Home() {
                         ) : (
                             <ul className="shopping-list">
                                 {favorites.map(list => (
-                                    <li key={list.name} className="list-item">
-                                        <div
-                                            className="item-content"
-                                            onClick={() => {
-                                                if (!list.isDeleted) {
-                                                    localStorage.setItem('currentListName', list.displayName || list.name);
-                                                    navigate(`/?list=${list.name}`);
-                                                }
-                                            }}
-                                            style={{ cursor: list.isDeleted ? 'default' : 'pointer' }}
-                                        >
-                                            <div className="text-content">
-                                                <span className="item-author" style={{ fontSize: '0.65rem' }}>{list.itemCount} items</span>
-                                                <span className={`item-text ${list.isDeleted ? 'text-danger line-through' : ''}`}>
-                                                    {list.displayName || list.name}
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div className="item-actions">
-                                            <button onClick={(e) => { e.stopPropagation(); toggleFavDashboard(list.name); }} className="delete-btn" style={{ color: 'var(--accent-color)' }}>
-                                                <StarOff size={18} />
-                                            </button>
-                                            {!list.isDeleted && (
-                                                <button onClick={(e) => { e.stopPropagation(); deleteListDashboard(list.name); }} className="delete-btn">
-                                                    <Trash2 size={18} />
-                                                </button>
-                                            )}
-                                        </div>
-                                    </li>
+                                    <DashboardItem
+                                        key={list.name}
+                                        list={list}
+                                        onOpen={(l) => {
+                                            localStorage.setItem('currentListName', l.displayName || l.name);
+                                            navigate(`/?list=${l.name}`);
+                                        }}
+                                        onShare={handleShareList}
+                                        onToggleFav={toggleFavDashboard}
+                                        onDelete={deleteListDashboard}
+                                    />
                                 ))}
                             </ul>
                         )}

@@ -49,6 +49,8 @@ function Header() {
     }
   };
 
+
+
   // Title Logic
   // Title Logic
   const getTitle = () => {
@@ -111,13 +113,16 @@ function Header() {
           </a>
         )}
         {listDetails && user && (
-          <button
-            onClick={handleToggleFavorite}
-            className={`icon-btn ${isFavorite ? 'text-yellow-400' : 'text-slate-500'}`}
-            style={{ width: '40px', height: '40px', padding: 0 }}
-          >
-            <Star size={24} fill={isFavorite ? "currentColor" : "none"} />
-          </button>
+          <>
+
+            <button
+              onClick={handleToggleFavorite}
+              className={`icon-btn ${isFavorite ? 'text-yellow-400' : 'text-slate-500'}`}
+              style={{ width: '40px', height: '40px', padding: 0 }}
+            >
+              <Star size={24} fill={isFavorite ? "currentColor" : "none"} />
+            </button>
+          </>
         )}
       </div>
     </header >
