@@ -151,14 +151,14 @@ export default function Profile() {
     };
 
     return (
-        <div style={{ width: '100%', height: '100%', maxWidth: '480px', margin: '0 auto' }}>
+        <div style={{ width: '100%' }}>
             <div className="mb-8 text-center">
                 <h2 style={{ fontSize: '1.75rem', marginBottom: '0.5rem', color: 'var(--text-primary)', fontWeight: '700' }}>User Profile</h2>
                 <p className="subtitle" style={{ fontSize: '1rem' }}>Identify yourself to your shopping buddies.</p>
             </div>
 
             <form onSubmit={handleSaveProfile} className="space-y-6">
-                <div>
+                <div style={{ marginBottom: '24px' }}>
                     <label htmlFor="username" style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem', color: 'var(--text-secondary)', fontWeight: '500' }}>Username (Unique)</label>
                     <input
                         type="text"
@@ -189,8 +189,21 @@ export default function Profile() {
                     <button
                         type="submit"
                         disabled={loading}
-                        className="btn-primary"
-                        style={{ width: '100%', borderRadius: '12px', fontSize: '1rem', height: '48px', fontWeight: '600', textTransform: 'uppercase', letterSpacing: '0.05em' }}
+                        style={{
+                            width: '100%',
+                            maxWidth: '100%',
+                            borderRadius: '12px',
+                            fontSize: '1rem',
+                            height: '48px',
+                            fontWeight: '600',
+                            textTransform: 'uppercase',
+                            letterSpacing: '0.05em',
+                            boxSizing: 'border-box',
+                            background: 'var(--accent-color)',
+                            border: 'none',
+                            color: '#fff',
+                            cursor: 'pointer'
+                        }}
                     >
                         {loading ? 'Saving...' : 'Save & Continue'}
                     </button>
@@ -199,7 +212,7 @@ export default function Profile() {
 
             {isProfileSaved && (
                 <>
-                    <div style={{ marginTop: '40px', paddingTop: '32px', borderTop: '1px solid var(--glass-border)' }}>
+                    <div style={{ marginTop: '24px', paddingTop: '24px', borderTop: '1px solid var(--glass-border)' }}>
                         <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--text-primary)', fontWeight: '600' }}>Create New List</h3>
                         <div className="input-wrapper" style={{ marginBottom: 0 }}>
                             <input
@@ -222,7 +235,7 @@ export default function Profile() {
                     </div>
 
                     {favorites.length > 0 && (
-                        <div style={{ marginTop: '40px' }}>
+                        <div style={{ marginTop: '24px' }}>
                             <h3 style={{ fontSize: '1.1rem', marginBottom: '16px', color: 'var(--text-primary)', fontWeight: '600' }}>Favorite Lists</h3>
                             <ul className="shopping-list">
                                 {favorites.map(list => (

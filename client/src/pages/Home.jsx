@@ -318,15 +318,6 @@ export default function Home() {
 
     return (
         <>
-            {/* Config banner removed, moved to header subtitle */}
-            {!configMode && user && (
-                <div className="flex justify-end mb-2 px-1">
-                    <button onClick={handleToggleFavorite} className={`icon-btn ${isFavorite ? 'text-yellow-400' : ''}`} style={{ marginBottom: 0 }}>
-                        <Star size={24} fill={isFavorite ? "currentColor" : "none"} />
-                    </button>
-                </div>
-            )}
-
             {/* Input Area */}
             <section className="input-area">
                 <div className="input-wrapper">
@@ -346,6 +337,11 @@ export default function Home() {
                     >
                         <Plus size={24} strokeWidth={2} />
                     </button>
+                    {!configMode && user && (
+                        <button onClick={handleToggleFavorite} className={`icon-btn ${isFavorite ? 'text-yellow-400' : ''}`} style={{ marginBottom: 0 }}>
+                            <Star size={24} fill={isFavorite ? "currentColor" : "none"} />
+                        </button>
+                    )}
                 </div>
             </section>
 

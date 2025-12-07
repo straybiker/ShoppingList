@@ -24,13 +24,21 @@
 }
 
 @layer base {
+
+    *,
+    *::before,
+    *::after {
+        box-sizing: border-box;
+    }
+
     body {
         font-family: var(--font-family);
         background-color: var(--bg-color);
         color: var(--text-primary);
         min-height: 100vh;
-        /* Remved flex centering to avoid clipping on overflow, using margin: auto on container instead */
         overflow-y: auto;
+        overflow-x: hidden;
+        /* Prevent horizontal scroll globally */
         margin: 0;
     }
 }
@@ -80,6 +88,7 @@
     margin: 0 auto;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
 }
 
 /* Header */
@@ -142,7 +151,7 @@
 
 /* Input Area */
 .input-area {
-    margin-bottom: 10px;
+    margin-bottom: 5px;
 }
 
 .input-wrapper {
@@ -150,11 +159,15 @@
     gap: 12px;
     padding: 0px;
     align-items: center;
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
 }
 
 /* Match legacy input selector */
 input[type="text"] {
     flex: 1;
+    min-width: 0;
     background: rgba(15, 23, 42, 0.6);
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-md);
@@ -246,7 +259,7 @@ input[type="text"]::placeholder {
     list-style: none;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 12px;
     padding: 0;
 }
 
@@ -421,7 +434,7 @@ input[type="text"]::placeholder {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-top: 12px;
+    margin-top: 4px;
     gap: 12px;
 }
 
