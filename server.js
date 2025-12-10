@@ -417,6 +417,10 @@ app.post('/api/lists', async (req, res) => {
                 return res.status(400).json({ error: 'Display name is required' });
             }
 
+            if (displayName.length > 20) {
+                return res.status(400).json({ error: 'Display name must be 20 characters or less' });
+            }
+
             const safeName = displayName.trim();
 
             // Generate a unique ID for the list

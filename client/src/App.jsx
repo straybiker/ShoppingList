@@ -1,5 +1,6 @@
 
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
+
 import { ToastProvider } from './context/ToastContext';
 import Home from './pages/Home';
 import Profile from './pages/Profile';
@@ -152,6 +153,7 @@ function App() {
             <Route path="/profile" element={<Profile />} />
             <Route path="/config-lists" element={<Home />} />
             <Route path="/config-users" element={<Home />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Layout>
       </Router>

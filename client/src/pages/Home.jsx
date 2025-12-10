@@ -99,9 +99,12 @@ export default function Home() {
                 if (data.length > 0 && data[0].displayName) {
                     // Logic for list name updates if needed
                 }
-                // Call checkFavoriteStatus here, but it's defined later. 
-                // To avoid hoisting issues, we can extract checkFavorite logic or just call it if available.
-                // Or define checkFavoriteStatus BEFORE loadItems.
+            } else {
+                if (res.status === 404) {
+                    setItems([]); // Clear stale data
+                    showToast('List not found, redirecting...', 'error');
+                    navigate('/'); // Redirect to dashboard
+                }
             }
         } catch (e) { console.error(e); }
     }, [getListId, configMode]);
@@ -459,6 +462,7 @@ export default function Home() {
                                 }}
                                 placeholder="Create a new list ..."
                                 autoComplete="off"
+                                maxLength={20}
                             />
                             <button
                                 onClick={handleCreateNewList}
