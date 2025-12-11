@@ -53,8 +53,12 @@ function rateLimiter(req, res, next) {
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static('public'));
+app.use(express.static('public')); // Serve built React client
 app.use('/api', rateLimiter); // Apply rate limiting to API routes
+
+// ... (rest of the file)
+// Note: We are removing the catch-all route to avoid conflicts with frontend routing in dev
+// app.get('*', ...);
 
 // Ensure data directory exists
 async function ensureDataDir() {
@@ -413,6 +417,10 @@ app.post('/api/lists', async (req, res) => {
                 return res.status(400).json({ error: 'Display name is required' });
             }
 
+            if (displayName.length > 20) {
+                return res.status(400).json({ error: 'Display name must be 20 characters or less' });
+            }
+
             const safeName = displayName.trim();
 
             // Generate a unique ID for the list
@@ -697,8 +705,13 @@ app.delete('/api/items/:listId/:itemId', async (req, res) => {
     });
 });
 
-// Serve index.html for root
-app.get('/', (req, res) => {
+// API Root
+app.get('/api', (req, res) => {
+    res.json({ message: 'Shopping List API is running' });
+});
+
+// SPA Fallback: Serve index.html for any unknown routes (non-API)
+app.get('*', rateLimiter, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 

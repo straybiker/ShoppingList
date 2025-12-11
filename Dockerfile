@@ -1,21 +1,25 @@
-# Use Node.js alpine image
+# Stage 1: Build React Client
+FROM node:22-alpine AS client_build
+WORKDIR /app/client
+COPY client/package*.json ./
+RUN npm ci
+COPY client/ ./
+RUN npm run build
+
+# Stage 2: Production Server
 FROM node:22-alpine
-
-# Set environment variables
 ENV NODE_ENV=production
-
-# Create app directory
 WORKDIR /usr/src/app
 
-# Copy package.json and package-lock.json
+# Copy server dependencies
 COPY package*.json ./
-
-# Install dependencies
 RUN npm ci --only=production
 
-# Copy source files
+# Copy server code
 COPY server.js ./
-COPY public ./public
+
+# Copy built client from Stage 1 to public/
+COPY --from=client_build /app/client/dist ./public
 
 # Create data directory and set permissions
 RUN mkdir -p data && chown -R node:node /usr/src/app

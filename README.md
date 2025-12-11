@@ -1,147 +1,80 @@
 # <img width="56" height="56" alt="shoppinglist_sqr" src="https://github.com/user-attachments/assets/d07dd3c2-c0ea-476c-875d-589a2ac9ec9e" /> Shopping List App
 
-A modern, real-time shopping list application built with Node.js, Express, and vanilla HTML/CSS/JS.
+A modern, real-time shopping list application built with **React**, **Node.js**, **Express**, and **Docker**.
 
-<img width="456" height="593" alt="image" src="https://github.com/user-attachments/assets/e1d2063c-fd5a-467d-a5f6-2f1028021607" />
+## Screenshots
+<img width="376" height="483" alt="image" src="https://github.com/user-attachments/assets/e9af616f-0968-4234-b7aa-b92f2c12be14" />
+<img width="372" height="448" alt="image" src="https://github.com/user-attachments/assets/39c961a6-85e5-42a4-b2e6-2d70af4294a8" />
+<img width="376" height="422" alt="image" src="https://github.com/user-attachments/assets/121049c7-2dad-4141-a5f9-48364e6dfd1d" />
+
+
 
 
 ## Features
 
-- **Real-time Synchronization**: Updates appear instantly across all connected devices using Server-Sent Events (SSE).
-- **User Profiles**: Create a unique username and display name to identify yourself to others.
-- **Favorites System**: Save your frequently used lists to your profile for quick access.
-- **Smart Sharing**: Easily share lists with friends via generated links.
-- **State Persistence**: Your current list and user identity are saved locally, so you pick up right where you left off.
-- **Backend Storage**: Lists are saved persistently on the server (JSON file storage).
-- **Slash Commands**:
-  - `/clear-cache`: Instantly delete all items in the current list.
-  - `/config-lists`: Enter configuration mode to manage and delete existing lists.
-  - `/config-users`: Enter user configuration mode to view and manage users.
-- **Smart UI**:
-  - **Mobile-First Layout**: Fixed header and input box with an endless scrolling list.
-  - **Modern Aesthetics**: Dark premium theme with glassmorphism effects and clean, borderless inputs.
-  - **Responsive Design**: Optimized for both mobile and desktop experiences.
-  - **Interactive Feedback**: Toast notifications and smooth transitions.
-- **List Management**:
-  - Add, edit, and delete items.
-  - Mark items as completed.
-  - "Delete Completed" button to clean up the list.
-  - Sort items alphabetically.
-- **Security & Performance**:
-  - Rate limiting (100 requests/15 min per IP).
-  - Input validation.
-  - Write queue system for concurrent updates.
+- **Real-time Synchronization**: Updates appear instantly across all devices (SSE).
+- **Dashboard**: Manage multiple lists, mark favorites, and share link.
+- **Smart Interactions**:
+  - **Slide-to-Delete**: Swipe items/lists to delete (preventing accidents).
+  - **Share Links**: One-tap sharing via system sheet or clipboard.
+- **User Profiles**: Custom usernames and display names.
+- **Modern UI**: Dark mode, glassmorphism, responsive mobile-first design.
+- **Persistent Data**: File-based JSON storage with Docker volume persistence.
 
-## Usage & Deep Linking
+## Slash Commands
+You can type these commands directly into the item input box:
+- `/clear-cache`: Instantly delete all items in the current list.
+- `/config-lists`: Enter configuration mode to manage existing lists.
+- `/config-users`: Enter user configuration mode to view and manage users.
 
-The app now persists your session (User and List) in the browser's `localStorage`. URL parameters are primarily used for sharing and deep linking.
+## Deployment
 
-### Sharing Lists
-To share a list, simply send the URL with the `list` parameter:
-```
-http://localhost:3000/?list=party_supplies
-```
-When a user opens this link, they will join that list.
+### Docker (Recommended)
 
-### User Identity
-You can set your username and display name on the **Profile Page** (accessible via the user icon in the top right).
-- **Username**: Unique identifier.
-- **Display Name**: What others see when you add items.
+The easiest way to deploy is using Docker Compose. This allows you to run the app with a single command.
 
-Legacy URL parameters for user setting (`?user=John`) are still supported for quick initialization but are no longer required for every visit.
+#### Prerequisites
+- Docker & Docker Compose installed.
 
-## Installation & Running
+#### Steps
 
-### Getting the Code
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/straybiker/ShoppingList.git
+   cd ShoppingList
+   ```
 
-Navigate to your desired installation directory (e.g., `/opt` on a server) and clone the repository:
-```bash
-cd /opt
-git clone https://github.com/straybiker/ShoppingList.git
-cd ShoppingList
-```
+2. **Start the application**:
+   ```bash
+   docker compose up -d --build
+   ```
+   This will build the React frontend, set up the backend, and expose the app on **Port 80**.
+
+3. **Access**:
+   Open `http://localhost` (or your server IP) in your browser.
+
+### Data Persistence
+Data is stored in a Docker volume `shopping_list_data` mapped to `/usr/src/app/data`. Your lists are safe even if you rebuild the container.
 
 ### Local Development
 
-1. **Prerequisites**: Ensure Node.js (v18 or higher) is installed.
-2. **Install Dependencies**:
+1. **Install Dependencies**:
    ```bash
-   npm install
+   npm install && cd client && npm install
    ```
-3. **Start the Server**:
+
+2. **Run Dev Server**:
    ```bash
+   # Terminal 1: Root directory (runs server)
    npm start
+   
+   # Terminal 2: client/ directory (runs React dev server)
+   cd client && npm run dev
    ```
-   The server will start on **port 3000** by default.
-4. **Access the App**:
-   Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### Docker Deployment
-
-#### Using Docker Compose (Recommended)
-This method automatically handles the build and sets up data persistence.
-
-```bash
-# 1. Get the latest code
-git pull
-
-# 2. Build and start the container in the background
-docker compose up -d --build
-
-# Access the app at http://localhost:3000
-```
-
-#### Using Docker CLI
-If you prefer running the container manually:
-
-```bash
-# 1. Build the image
-docker build -t shopping-list .
-
-# 2. Create a volume for data persistence
-docker volume create shopping_list_data
-
-# 3. Run the container
-# - Maps host port 80 to container port 3000
-# - Mounts the volume to /usr/src/app/data
-docker run -d \
-  -p 80:3000 \
-  -v shopping_list_data:/usr/src/app/data \
-  --name shopping-list \
-  shopping-list
-```
-
-### Solid Deployment Process (LXC + Portainer)
-
-This process ensures your app is always up-to-date, your data is safe, and Portainer reflects the correct state.
-
-**1. Update Code (via SSH)**
-Connect to your LXC host and pull the latest changes:
-```bash
-cd ShoppingList
-git pull
-```
-
-**2. Build & Deploy (via SSH)**
-Since you are building the image locally, run this command on the LXC host. It handles building the image and recreating the container in one step:
-```bash
-docker compose up -d --build
-```
-
-**3. Portainer Management**
-Portainer will automatically see the updated container. You can use Portainer to:
-- **Monitor logs**: Check for errors.
-- **Restart**: If needed.
-- **Console**: Access the container shell.
-
-**⚠️ IMPORTANT:**
-- **Data Safety**: The `docker-compose.yml` now includes `volumes: - shopping_list_data:/usr/src/app/data`. This guarantees your lists are safe during updates.
-- **Port**: The app is now exposed on **Port 80** of the LXC container.
+   The app will be available at `http://localhost:5173`.
 
 ## Technologies
-
-- **Frontend**: HTML5, CSS3 (Variables, Flexbox, Animations), Vanilla JavaScript (ES6+).
+- **Frontend**: React, Vite, Tailwind-inspired CSS.
 - **Backend**: Node.js, Express.
-- **Real-time**: Server-Sent Events (SSE).
-- **Data**: JSON file-based persistence.
-- **Containerization**: Docker.
+- **Infrastructure**: Docker, Nginx (optional/proxied).
