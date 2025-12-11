@@ -3,10 +3,12 @@
 A modern, real-time shopping list application built with **React**, **Node.js**, **Express**, and **Docker**.
 
 ## Screenshots
+<img width="376" height="483" alt="image" src="https://github.com/user-attachments/assets/e9af616f-0968-4234-b7aa-b92f2c12be14" />
+<img width="372" height="448" alt="image" src="https://github.com/user-attachments/assets/39c961a6-85e5-42a4-b2e6-2d70af4294a8" />
+<img width="376" height="422" alt="image" src="https://github.com/user-attachments/assets/121049c7-2dad-4141-a5f9-48364e6dfd1d" />
 
-| List View | Dashboard | Profile |
-|:---:|:---:|:---:|
-| <img src="screenshots/list_view.png" width="300" /> | <img src="screenshots/dashboard.png" width="300" /> | <img src="screenshots/profile.png" width="300" /> |
+
+
 
 ## Features
 
