@@ -711,7 +711,7 @@ app.get('/api', (req, res) => {
 });
 
 // SPA Fallback: Serve index.html for any unknown routes (non-API)
-app.get('*', (req, res) => {
+app.get('*', rateLimiter, (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 

@@ -1,18 +1,20 @@
 version: '3.8'
 
 services:
-  shopping-list:
+  shoppinglist:
     build:
       context: .
       dockerfile: Dockerfile
-    image: shopping-list:latest
-    container_name: shopping-list
+    image: shoppinglist:latest
+    container_name: shoppinglist
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
       - NODE_ENV=production
       - PORT=3000
+      - RATE_LIMIT_WINDOW_MS=900000
+      - RATE_LIMIT_MAX=1000
     volumes:
       - shopping_list_data:/usr/src/app/data
     pull_policy: build
