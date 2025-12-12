@@ -27,6 +27,9 @@ You can type these commands directly into the item input box:
 - `/config-lists`: Enter configuration mode to manage existing lists.
 - `/config-users`: Enter user configuration mode to view and manage users.
 
+## Sharing Lists
+To share a list, the user first has to log in on the app and then open the shared list.
+
 ## Deployment
 
 ### Docker (Recommended)

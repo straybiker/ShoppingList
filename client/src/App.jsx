@@ -16,11 +16,16 @@ function Header() {
   const listDetails = searchParams.get('list');
   const { showToast } = useToast();
   const [isFavorite, setIsFavorite] = useState(false);
+  const [, setRefresh] = useState(0);
   const user = localStorage.getItem('username');
 
   useEffect(() => {
     const checkStatus = async () => {
-      if (!listDetails || !user) {
+      if (!listDetails) {
+        setIsFavorite(false);
+        return;
+      }
+      if (!user) {
         setIsFavorite(false);
         return;
       }
@@ -35,8 +40,18 @@ function Header() {
     checkStatus();
   }, [listDetails, user]);
 
+  useEffect(() => {
+    const handleNameUpdate = () => setRefresh(prev => prev + 1);
+    window.addEventListener('listNameUpdated', handleNameUpdate);
+    return () => window.removeEventListener('listNameUpdated', handleNameUpdate);
+  }, []);
+
   const handleToggleFavorite = async () => {
-    if (!user || !listDetails) return;
+    if (!listDetails) return;
+    if (!user) {
+      showToast('Please sign in (Profile) to use favorites', 'error');
+      return;
+    }
     try {
       const res = await fetch(`/api/favorites/${user}/${listDetails}`, { method: 'POST' });
       if (res.ok) {
@@ -114,7 +129,7 @@ function Header() {
             <User size={24} />
           </a>
         )}
-        {listDetails && user && (
+        {listDetails && (
           <>
 
             <button

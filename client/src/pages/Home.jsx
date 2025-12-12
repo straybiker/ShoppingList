@@ -26,6 +26,7 @@ export default function Home() {
     const [isFavorite, setIsFavorite] = useState(false);
     const [favorites, setFavorites] = useState([]);
     const [newListName, setNewListName] = useState('');
+    const [listError, setListError] = useState(null);
 
     // 2. Router/Context Hooks
     const [searchParams, setSearchParams] = useSearchParams();
@@ -88,25 +89,38 @@ export default function Home() {
         }
 
         try {
-            const res = await fetch(`${API_URL}/${currentId}`);
-            if (res.ok) {
-                const data = await res.json();
+            const [itemsRes, listRes] = await Promise.all([
+                fetch(`${API_URL}/${currentId}`),
+                fetch(`/api/lists/${currentId}`)
+            ]);
+
+            if (itemsRes.ok) {
+                const data = await itemsRes.json();
                 setItems(prev => {
                     const isDiff = JSON.stringify(prev) !== JSON.stringify(data);
                     return isDiff ? data : prev;
                 });
+                setListError(null);
+            } else if (itemsRes.status === 404) {
+                setItems([]);
+                setListError('List not found');
+                return;
+            }
 
-                if (data.length > 0 && data[0].displayName) {
-                    // Logic for list name updates if needed
-                }
-            } else {
-                if (res.status === 404) {
-                    setItems([]); // Clear stale data
-                    showToast('List not found, redirecting...', 'error');
-                    navigate('/'); // Redirect to dashboard
+            if (listRes.ok) {
+                const listData = await listRes.json();
+                if (listData.displayName) {
+                    const currentName = localStorage.getItem('currentListName');
+                    if (currentName !== listData.displayName) {
+                        localStorage.setItem('currentListName', listData.displayName);
+                        window.dispatchEvent(new Event('listNameUpdated'));
+                    }
                 }
             }
-        } catch (e) { console.error(e); }
+        } catch (e) {
+            console.error(e);
+            setListError('Error loading list');
+        }
     }, [getListId, configMode]);
 
     // To fix the checkFavoriteStatus dependency in loadItems, we'll define it inside or move it up.
@@ -530,7 +544,18 @@ export default function Home() {
 
                     {/* List Area */}
                     <section className="list-area">
-                        {filteredItems.length === 0 ? (
+                        {listError ? (
+                            <div id="empty-state" className="empty-state">
+                                <p style={{ color: '#ef4444', marginBottom: '1rem' }}>{listError}</p>
+                                <button
+                                    className="btn-primary"
+                                    onClick={() => navigate('/')}
+                                    style={{ width: 'auto', padding: '8px 16px' }}
+                                >
+                                    Go to Dashboard
+                                </button>
+                            </div>
+                        ) : filteredItems.length === 0 ? (
                             <div id="empty-state" className="empty-state">
                                 <p>{configMode ? 'No items found' : 'Your list is empty'}</p>
                             </div>
