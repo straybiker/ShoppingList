@@ -90,8 +90,8 @@ export default function Home() {
 
         try {
             const [itemsRes, listRes] = await Promise.all([
-                fetch(`${API_URL}/${currentId}`),
-                fetch(`/api/lists/${currentId}`)
+                fetch(`${API_URL}/${currentId}?t=${Date.now()}`),
+                fetch(`/api/lists/${currentId}?t=${Date.now()}`)
             ]);
 
             if (itemsRes.ok) {
