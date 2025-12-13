@@ -53,12 +53,23 @@ function rateLimiter(req, res, next) {
 // Middleware
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static('public')); // Serve built React client
+
+// Serve static files with caching policy
+app.use(express.static('public', {
+    setHeaders: (res, path) => {
+        if (path.endsWith('index.html')) {
+            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        } else {
+            // Cache other static assets (JS/CSS/Images) for a long time (1 year)
+            // since they are hashed by Vite
+            res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        }
+    }
+}));
+
 app.use('/api', rateLimiter); // Apply rate limiting to API routes
 
-// ... (rest of the file)
-// Note: We are removing the catch-all route to avoid conflicts with frontend routing in dev
-// app.get('*', ...);
+
 
 // Ensure data directory exists
 async function ensureDataDir() {
@@ -712,6 +723,7 @@ app.get('/api', (req, res) => {
 
 // SPA Fallback: Serve index.html for any unknown routes (non-API)
 app.get('*', rateLimiter, (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
