@@ -94,6 +94,20 @@ export default function Home() {
                 fetch(`/api/lists/${currentId}?t=${Date.now()}`)
             ]);
 
+            let listExists = false;
+
+            if (listRes.ok) {
+                listExists = true;
+                const listData = await listRes.json();
+                if (listData.displayName) {
+                    const currentName = localStorage.getItem('currentListName');
+                    if (currentName !== listData.displayName) {
+                        localStorage.setItem('currentListName', listData.displayName);
+                        window.dispatchEvent(new Event('listNameUpdated'));
+                    }
+                }
+            }
+
             if (itemsRes.ok) {
                 const data = await itemsRes.json();
                 setItems(prev => {
@@ -103,18 +117,11 @@ export default function Home() {
                 setListError(null);
             } else if (itemsRes.status === 404) {
                 setItems([]);
-                setListError('List not found');
-                return;
-            }
-
-            if (listRes.ok) {
-                const listData = await listRes.json();
-                if (listData.displayName) {
-                    const currentName = localStorage.getItem('currentListName');
-                    if (currentName !== listData.displayName) {
-                        localStorage.setItem('currentListName', listData.displayName);
-                        window.dispatchEvent(new Event('listNameUpdated'));
-                    }
+                // If list details were found, trust that and don't show error (treat as empty)
+                if (listExists) {
+                    setListError(null);
+                } else {
+                    setListError('List not found');
                 }
             }
         } catch (e) {
