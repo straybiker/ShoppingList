@@ -121,7 +121,7 @@ export default function Home() {
                 if (listExists) {
                     setListError(null);
                 } else {
-                    setListError('List not found');
+                    setListError(`List not found (Debug: List=${listRes.status}, Items=${itemsRes.status})`);
                 }
             }
         } catch (e) {
