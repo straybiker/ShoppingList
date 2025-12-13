@@ -169,7 +169,7 @@ export default function Home() {
     const loadFavorites = useCallback(async (u) => {
         if (!u) return;
         try {
-            const res = await fetch(`/api/favorites/${u}`);
+            const res = await fetch(`/api/favorites/${u}?t=${Date.now()}`);
             if (res.ok) {
                 const favIds = await res.json();
                 const listPromises = favIds.map(id => fetch(`/api/lists/${id}`)
