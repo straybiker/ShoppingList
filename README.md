@@ -1,6 +1,12 @@
-# <img width="56" height="56" alt="shoppinglist_sqr" src="https://github.com/user-attachments/assets/d07dd3c2-c0ea-476c-875d-589a2ac9ec9e" /> Shopping List App
+<p align=center>
+  <img width="128" height="128" alt="shoppinglist_sqr" src="https://github.com/user-attachments/assets/d07dd3c2-c0ea-476c-875d-589a2ac9ec9e" /> 
+</p>
 
-A modern, real-time shopping list application built with **React**, **Node.js**, **Express**, and **Docker**.
+# ShoppingList
+
+**Share you shopping list**
+
+A modern, real-time sharebale shopping list application built with **React**, **Node.js**, **Express**, and **Docker**.
 
 ## Screenshots
 <img width="376" height="483" alt="image" src="https://github.com/user-attachments/assets/e9af616f-0968-4234-b7aa-b92f2c12be14" />
