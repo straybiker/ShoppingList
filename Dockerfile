@@ -24,8 +24,6 @@ COPY --from=client_build /app/client/dist ./public
 # Create data directory and set permissions
 RUN mkdir -p data && chown -R node:node /usr/src/app
 
-# Switch to non-root user
-USER node
 
 # Expose port 3000
 EXPOSE 3000

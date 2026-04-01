@@ -730,7 +730,7 @@ app.get('*', rateLimiter, (req, res) => {
 // Initialize and start server
 async function startServer() {
     await ensureDataDir();
-    app.listen(PORT, () => {
+    app.listen(PORT, '0.0.0.0', () => {
         console.log(`Server running on port ${PORT}`);
     });
 }
