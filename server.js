@@ -1,6 +1,7 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const cors = require('cors');
+const helmet = require('helmet');
 const fs = require('fs').promises;
 const path = require('path');
 const crypto = require('crypto');
@@ -13,6 +14,9 @@ const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
 // Trust proxy (required for correct IP detection behind Nginx/Docker/LXC proxies)
 app.set('trust proxy', 1);
+
+// Middleware
+app.use(helmet());
 
 // Simple in-memory rate limiter
 const rateLimit = new Map();
