@@ -241,9 +241,11 @@ function validateItemData(item) {
     return { valid: true };
 }
 
-// Amount is not accepted here: it changes only through increment/decrement.
+// Legacy: clients from before the atomic increment/decrement routes send the
+// absolute amount in PATCH. Accept it until every device has reloaded, then
+// remove 'amount' here and its check in the PATCH route.
 function sanitizeUpdates(updates) {
-    const allowedFields = ['text', 'completed'];
+    const allowedFields = ['text', 'completed', 'amount'];
     return Object.keys(updates)
         .filter(key => allowedFields.includes(key))
         .reduce((obj, key) => {
@@ -585,7 +587,7 @@ function amountRoute(delta) {
 app.post('/api/items/:listId/:itemId/increment', amountRoute(1));
 app.post('/api/items/:listId/:itemId/decrement', amountRoute(-1));
 
-// Update a single item (text, completed)
+// Update a single item (text, completed; amount only for legacy clients)
 app.patch('/api/items/:listId/:itemId', async (req, res) => {
     await dbMutex.run(async () => {
         try {
@@ -611,6 +613,12 @@ app.patch('/api/items/:listId/:itemId', async (req, res) => {
                     return res.status(400).json({ error: 'Invalid text for update' });
                 }
                 sanitizedUpdates.text = sanitizedUpdates.text.trim();
+            }
+
+            if (sanitizedUpdates.amount !== undefined) {
+                if (!Number.isInteger(sanitizedUpdates.amount) || sanitizedUpdates.amount < 1) {
+                    return res.status(400).json({ error: 'Invalid amount for update' });
+                }
             }
 
             if (sanitizedUpdates.completed !== undefined) {
