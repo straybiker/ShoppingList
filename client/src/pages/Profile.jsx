@@ -86,6 +86,7 @@ export default function Profile() {
                         onKeyDown={(e) => handleSlashKeyDown(e, setUsername)}
                         placeholder="e.g., johndoe"
                         required
+                        maxLength={32}
                         autoComplete="off"
                         style={{ width: '100%', boxSizing: 'border-box' }}
                     />
@@ -100,6 +101,7 @@ export default function Profile() {
                         onChange={(e) => setDisplayName(e.target.value)}
                         onKeyDown={(e) => handleSlashKeyDown(e, setDisplayName)}
                         placeholder="e.g., John D."
+                        maxLength={32}
                         autoComplete="off"
                         style={{ width: '100%', boxSizing: 'border-box' }}
                     />

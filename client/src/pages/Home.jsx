@@ -216,16 +216,42 @@ export default function Home() {
         const currentId = getListId();
         if (currentId) checkFavoriteStatus(currentId);
 
-        const eventSource = new EventSource('/api/events');
-        eventSource.onmessage = (e) => {
-            const data = JSON.parse(e.data);
-            if (data.type === 'update') {
-                loadItems();
-                if (currentId) checkFavoriteStatus(currentId);
-            }
+        // After a reconnect, reload to get the changes that were missed while offline.
+        let hasConnected = false;
+        let eventSource;
+        let retryTimer;
+        let retryDelay = 1000;
+        let stopped = false;
+
+        const connect = () => {
+            eventSource = new EventSource('/api/events');
+            eventSource.onmessage = (e) => {
+                const data = JSON.parse(e.data);
+                const isReconnect = data.type === 'connected' && hasConnected;
+                if (data.type === 'connected') {
+                    hasConnected = true;
+                    retryDelay = 1000;
+                }
+                if (data.type === 'update' || isReconnect) {
+                    loadItems();
+                    if (currentId) checkFavoriteStatus(currentId);
+                }
+            };
+            // The browser retries only network errors. An HTTP error, such as a 502 from
+            // the reverse proxy during a deploy or a 429, closes the stream for good.
+            eventSource.onerror = () => {
+                if (stopped || eventSource.readyState !== EventSource.CLOSED) return;
+                retryTimer = setTimeout(connect, retryDelay);
+                retryDelay = Math.min(retryDelay * 2, 30000);
+            };
         };
-        eventSource.onerror = () => eventSource.close();
-        return () => eventSource.close();
+        connect();
+
+        return () => {
+            stopped = true;
+            clearTimeout(retryTimer);
+            eventSource.close();
+        };
     }, [loadItems, getListId]);
 
 
