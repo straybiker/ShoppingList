@@ -46,7 +46,7 @@ This guide follows a **Blue/Green Deployment** strategy integrated with a **Git 
 
 1.  Start the app on the **Green LXC**:
     ```bash
-    docker-compose up -d --build
+    docker compose up -d --build
     ```
 2.  **Verify**: Open `http://<GREEN_LXC_IP>:3000`.
     *   Test the new features.
@@ -71,7 +71,7 @@ Once testing is successful, promote the code to `main` and prepare the Green ser
     cd /root/ShoppingList
     git checkout main
     git pull origin main
-    docker-compose up -d --build
+    docker compose up -d --build
     ```
     *The Green server is now running "Main" code.*
 
@@ -81,18 +81,32 @@ Once testing is successful, promote the code to `main` and prepare the Green ser
 
 Now that Green is running the correct code (`main`), bring over the real user data from Blue.
 
+> **Volume name**: Docker Compose adds the project name (the folder name, in lowercase) before the volume name. For the folder `/root/ShoppingList`, the real volume is `shoppinglist_shopping_list_data`, not `shopping_list_data`. If you use the short name, Docker makes a new, empty volume and the backup contains no data.
+>
+> Find the real name on each LXC before you start:
+> ```bash
+> docker volume ls --filter name=shopping_list_data
+> ```
+> The commands below use `shoppinglist_shopping_list_data`. Change it if your output is different.
+
 ### A. Export Data (On Blue/Old LXC)
 1.  **Stop Blue**:
     ```bash
-    docker-compose down
+    cd /root/ShoppingList
+    docker compose down
     ```
 2.  **Backup Volume**:
     ```bash
     docker run --rm \
-      -v shopping_list_data:/data \
+      -v shoppinglist_shopping_list_data:/data \
       -v $(pwd):/backup \
       alpine tar cvf /backup/data_backup.tar /data
     ```
+3.  **Verify the Backup**: The list must show `data/lists.json` and `data/users.json`.
+    ```bash
+    tar tvf data_backup.tar
+    ```
+    If these files are missing, stop. Do not continue with the migration.
 
 ### B. Transfer Backup
 *Run this on the **Blue/Old LXC**:*
@@ -104,20 +118,20 @@ scp data_backup.tar root@<GREEN_LXC_IP>:/root/ShoppingList/
 1.  **Stop Green**:
     ```bash
     cd /root/ShoppingList
-    docker-compose down
+    docker compose down
     ```
-    *(Note: This deletes the test data you created in Step 2, which is expected.)*
+    *(Note: `down` keeps the volume. The restore in the next step replaces the test data from Step 2.)*
 
 2.  **Restore Volume**:
     ```bash
     docker run --rm \
-      -v shopping_list_data:/data \
+      -v shoppinglist_shopping_list_data:/data \
       -v $(pwd):/backup \
       alpine tar xvf /backup/data_backup.tar -C /
     ```
 3.  **Start Green (Production Mode)**:
     ```bash
-    docker-compose up -d
+    docker compose up -d
     ```
 4.  **Final Verification**: Check `http://<GREEN_LXC_IP>:3000`. Your real lists should be there.
 

@@ -63,7 +63,7 @@ The easiest way to deploy is using Docker Compose. This allows you to run the ap
    Open `http://localhost` (or your server IP) in your browser.
 
 ### Data Persistence
-Data is stored in a Docker volume `shopping_list_data` mapped to `/usr/src/app/data`. Your lists are safe even if you rebuild the container.
+Data is stored in a Docker volume `shopping_list_data` (full name: `<project>_shopping_list_data`, e.g. `shoppinglist_shopping_list_data`) mapped to `/usr/src/app/data`. Your lists are safe even if you rebuild the container.
 
 ### Local Development
 

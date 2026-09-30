@@ -67,7 +67,8 @@ app.use(express.static('public', {
     }
 }));
 
-app.use('/api', rateLimiter); // Apply rate limiting to API routes
+// SSE reconnects must not count against the limit: a 429 closes the EventSource for good.
+app.use('/api', (req, res, next) => req.path === '/events' ? next() : rateLimiter(req, res, next));
 
 
 
@@ -80,35 +81,53 @@ async function ensureDataDir() {
     }
 }
 
-// Helper to read data
-async function readData() {
+// Read a JSON store into a null-prototype object.
+// Null prototype: keys such as "__proto__" from user input cannot pollute Object.prototype.
+// Only a missing file gives an empty store. Any other error is thrown, so that
+// a corrupt file never causes the next write to overwrite all data.
+async function readStore(file) {
+    let raw;
     try {
-        const data = await fs.readFile(DATA_FILE, 'utf8');
-        return JSON.parse(data);
+        raw = await fs.readFile(file, 'utf8');
     } catch (err) {
         if (err.code === 'ENOENT') {
-            return {};
+            return Object.create(null);
         }
-        console.error('Error reading data file:', err);
-        return {};
+        throw err;
     }
+
+    let parsed;
+    try {
+        parsed = JSON.parse(raw);
+    } catch (err) {
+        console.error(`Corrupt data file ${file}. Refusing to continue:`, err.message);
+        throw err;
+    }
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        throw new Error(`Unexpected content in data file ${file}`);
+    }
+    return Object.assign(Object.create(null), parsed);
+}
+
+// Atomic write: write a temp file, then rename it over the target.
+// A crash during the write leaves the old file intact.
+async function writeStore(file, content) {
+    const tmpFile = `${file}.${process.pid}.tmp`;
+    await fs.writeFile(tmpFile, JSON.stringify(content, null, 2));
+    await fs.rename(tmpFile, file);
+}
+
+async function readData() {
+    return readStore(DATA_FILE);
 }
 
 async function readUsers() {
-    try {
-        const data = await fs.readFile(USERS_FILE, 'utf8');
-        return JSON.parse(data);
-    } catch (err) {
-        if (err.code === 'ENOENT') {
-            return {};
-        }
-        console.error('Error reading users file:', err);
-        return {};
-    }
+    return readStore(USERS_FILE);
 }
 
 async function writeUsers(users) {
-    await fs.writeFile(USERS_FILE, JSON.stringify(users, null, 2));
+    await writeStore(USERS_FILE, users);
 }
 
 // Mutex for atomic operations
@@ -146,7 +165,7 @@ const dbMutex = new Mutex();
 
 // Helper to write data (direct write, concurrency handled by Mutex)
 async function writeData(data) {
-    await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2));
+    await writeStore(DATA_FILE, data);
     broadcastChange();
 }
 
@@ -163,18 +182,20 @@ app.get('/api/events', (req, res) => {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // Disable proxy buffering (Nginx)
+    res.flushHeaders();
 
     const clientId = generateClientId();
     const newClient = {
         id: clientId,
-        res,
-        lastSeen: Date.now()
+        res
     };
 
     clients.push(newClient);
     console.log(`SSE client connected: ${clientId} (${clients.length} total)`);
 
-    // Send initial connection message
+    // Tell the browser to reconnect after 3 s, then send initial connection message
+    res.write('retry: 3000\n\n');
     res.write(`data: ${JSON.stringify({ type: 'connected', clientId })}\n\n`);
 
     req.on('close', () => {
@@ -183,43 +204,32 @@ app.get('/api/events', (req, res) => {
     });
 });
 
-function broadcastChange() {
-    const message = `data: ${JSON.stringify({ type: 'update' })}\n\n`;
-
+// Write a message to all SSE clients. Drop (and close) connections that are gone.
+function sendToClients(message) {
     clients = clients.filter(client => {
+        const { res } = client;
+        if (res.destroyed || res.writableEnded) {
+            console.log(`Removing dead client: ${client.id}`);
+            return false;
+        }
         try {
-            client.res.write(message);
-            client.lastSeen = Date.now();
+            res.write(message);
             return true;
         } catch (error) {
-            console.error('Failed to broadcast to client:', client.id, error.message);
-            return false; // Remove dead connection
+            console.error('Failed to write to client:', client.id, error.message);
+            res.end();
+            return false;
         }
     });
 }
 
-// Heartbeat to detect stale connections
+function broadcastChange() {
+    sendToClients(`data: ${JSON.stringify({ type: 'update' })}\n\n`);
+}
+
+// Heartbeat keeps idle connections open through proxies and detects dead ones
 setInterval(() => {
-    const now = Date.now();
-    const timeout = 60000; // 1 minute
-
-    clients = clients.filter(client => {
-        try {
-            // Send heartbeat
-            client.res.write(': heartbeat\n\n');
-
-            // Check if client is stale
-            if (now - client.lastSeen > timeout) {
-                console.log(`Removing stale client: ${client.id}`);
-                return false;
-            }
-
-            return true;
-        } catch (error) {
-            console.log(`Removing dead client: ${client.id}`);
-            return false;
-        }
-    });
+    sendToClients(': heartbeat\n\n');
 }, 30000); // Every 30 seconds
 
 // Input validation helpers
@@ -274,8 +284,17 @@ app.post('/api/users/register', async (req, res) => {
                 return res.status(400).json({ error: 'Username is required' });
             }
 
+            if (username.trim().length > 32) {
+                return res.status(400).json({ error: 'Username must be 32 characters or less' });
+            }
+
+            if (displayName !== undefined && displayName !== null &&
+                (typeof displayName !== 'string' || displayName.trim().length > 32)) {
+                return res.status(400).json({ error: 'Display name must be text of 32 characters or less' });
+            }
+
             const safeUsername = username.trim().toLowerCase();
-            const safeDisplayName = displayName ? displayName.trim() : safeUsername;
+            const safeDisplayName = displayName && displayName.trim() ? displayName.trim() : safeUsername;
 
             const users = await readUsers();
 
