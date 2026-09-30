@@ -127,8 +127,9 @@ scp data_backup.tar root@<GREEN_LXC_IP>:/root/ShoppingList/
     docker run --rm \
       -v shoppinglist_shopping_list_data:/data \
       -v $(pwd):/backup \
-      alpine tar xvf /backup/data_backup.tar -C /
+      alpine sh -c "tar xvf /backup/data_backup.tar -C / && chown -R 1000:1000 /data"
     ```
+    *(The app runs as user `node` (UID 1000). Without the `chown`, it cannot write the restored files.)*
 3.  **Start Green (Production Mode)**:
     ```bash
     docker compose up -d

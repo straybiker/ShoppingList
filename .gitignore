@@ -6,3 +6,7 @@ data/
 test-results/
 playwright-report/
 blob-report/
+# Build output: Docker builds the client itself
+/public/
+.env
+.claude/

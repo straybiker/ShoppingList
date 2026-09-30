@@ -9,16 +9,14 @@ export default function ListItem({ item, configMode, onToggle, onIncrement, onDe
     const isDragging = useRef(false);
 
     let metaText = null;
-    if (configMode) {
-        if (configMode === 'lists') {
-            const dateStr = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'Never updated';
-            const creatorStr = item.creatorName ? `Created by ${item.creatorName} • ` : '';
-            metaText = creatorStr + dateStr;
-        } else if (configMode === 'users') {
-            metaText = item.updatedAt ? `Last seen: ${new Date(item.updatedAt).toLocaleString()}` : '';
-        }
-    } else {
-        metaText = item.authorName || (item.addedBy !== 'Guest' ? item.addedBy : null);
+    if (configMode === 'lists') {
+        const dateStr = item.updatedAt ? new Date(item.updatedAt).toLocaleString() : 'Never updated';
+        const creatorStr = item.creatorName ? `Created by ${item.creatorName} • ` : '';
+        const deletedStr = item.deletedAt ? `Deleted ${new Date(item.deletedAt).toLocaleString()} • ` : '';
+        metaText = deletedStr + creatorStr + dateStr;
+    } else if (!configMode) {
+        // addedBy is a random device ID: never show it
+        metaText = item.authorName && item.authorName !== 'Guest' ? item.authorName : null;
     }
 
     const handlePointerDown = (e) => {

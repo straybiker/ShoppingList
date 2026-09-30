@@ -13,7 +13,7 @@ WORKDIR /usr/src/app
 
 # Copy server dependencies
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 # Copy server code
 COPY server.js ./
@@ -23,7 +23,7 @@ COPY --from=client_build /app/client/dist ./public
 
 # Create data directory and set permissions
 RUN mkdir -p data && chown -R node:node /usr/src/app
-
+USER node
 
 # Expose port 3000
 EXPOSE 3000

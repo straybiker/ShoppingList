@@ -1,7 +1,6 @@
 const express = require('express');
-const bodyParser = require('body-parser');
-const cors = require('cors');
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
@@ -20,10 +19,8 @@ const RATE_LIMIT_WINDOW = parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 
 const MAX_REQUESTS = parseInt(process.env.RATE_LIMIT_MAX) || 1000; // 1000 requests default
 
 function rateLimiter(req, res, next) {
-    // Use IP as the identifier. 
-    // Note: In a real multi-user app with auth, you'd use the user ID.
-    // Here, we stick to IP to prevent abuse, but we've increased the limit
-    // to accommodate multiple users behind the same NAT/Proxy.
+    // Use IP as the identifier. There are no user accounts.
+    // The limit is high to accommodate multiple users behind the same NAT/Proxy.
     const ip = req.ip;
     const now = Date.now();
 
@@ -51,8 +48,7 @@ function rateLimiter(req, res, next) {
 }
 
 // Middleware
-app.use(cors());
-app.use(bodyParser.json());
+app.use(express.json());
 
 // Serve static files with caching policy
 app.use(express.static('public', {
@@ -124,10 +120,6 @@ async function readData() {
 
 async function readUsers() {
     return readStore(USERS_FILE);
-}
-
-async function writeUsers(users) {
-    await writeStore(USERS_FILE, users);
 }
 
 // Mutex for atomic operations
@@ -249,8 +241,9 @@ function validateItemData(item) {
     return { valid: true };
 }
 
+// Amount is not accepted here: it changes only through increment/decrement.
 function sanitizeUpdates(updates) {
-    const allowedFields = ['text', 'completed', 'amount'];
+    const allowedFields = ['text', 'completed'];
     return Object.keys(updates)
         .filter(key => allowedFields.includes(key))
         .reduce((obj, key) => {
@@ -259,111 +252,83 @@ function sanitizeUpdates(updates) {
         }, {});
 }
 
-// Helper to get list data safely
-function getList(data, listId) {
-    return data[listId] || null;
+// A soft-deleted list stays restorable for this period, then it is purged.
+const DELETE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+// Knowing the list ID gives full access to the list, so new IDs carry 128 random bits.
+// Legacy IDs ("<timestamp>-<random>") match the same pattern and stay valid.
+const LIST_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+
+function generateListId() {
+    return crypto.randomBytes(16).toString('base64url');
 }
 
-// Helper to touch a list (update timestamp)
-function touchList(data, listId) {
-    const list = getList(data, listId);
-    if (list) {
-        list.updatedAt = Date.now();
+// Result of a list lookup: { list } or { status, error }.
+// A soft-deleted list answers 410, so that a client can offer a restore.
+function findActiveList(data, listId) {
+    const list = data[listId];
+    if (!list) {
+        return { status: 404, error: 'List not found' };
     }
+    if (list.deletedAt) {
+        return { status: 410, error: 'List deleted', deletedAt: list.deletedAt };
+    }
+    return { list };
+}
+
+function sendLookupError(res, lookup) {
+    const body = { error: lookup.error };
+    if (lookup.deletedAt) {
+        body.deletedAt = lookup.deletedAt;
+    }
+    return res.status(lookup.status).json(body);
+}
+
+// Admin token: from the file in ADMIN_TOKEN_FILE (Docker secret) or from ADMIN_TOKEN.
+// Without a token, the admin API does not exist (404).
+function loadAdminToken() {
+    const file = process.env.ADMIN_TOKEN_FILE;
+    if (file) {
+        try {
+            return fsSync.readFileSync(file, 'utf8').trim() || null;
+        } catch (err) {
+            console.error(`Cannot read ADMIN_TOKEN_FILE ${file}:`, err.message);
+            return null;
+        }
+    }
+    return (process.env.ADMIN_TOKEN || '').trim() || null;
+}
+
+const ADMIN_TOKEN = loadAdminToken();
+
+function requireAdmin(req, res, next) {
+    if (!ADMIN_TOKEN) {
+        return res.status(404).json({ error: 'Not found' });
+    }
+    const header = req.get('authorization') || '';
+    const supplied = header.startsWith('Bearer ') ? header.slice(7) : '';
+    // Compare hashes: timingSafeEqual needs equal lengths, and the token length does not leak.
+    const a = crypto.createHash('sha256').update(supplied).digest();
+    const b = crypto.createHash('sha256').update(ADMIN_TOKEN).digest();
+    if (!supplied || !crypto.timingSafeEqual(a, b)) {
+        return res.status(401).json({ error: 'Admin token required' });
+    }
+    next();
 }
 
 // API Routes
 
-// Register/Update User
-app.post('/api/users/register', async (req, res) => {
-    await dbMutex.run(async () => {
-        try {
-            const { username, displayName } = req.body;
-
-            if (!username || typeof username !== 'string' || username.trim() === '') {
-                return res.status(400).json({ error: 'Username is required' });
-            }
-
-            if (username.trim().length > 32) {
-                return res.status(400).json({ error: 'Username must be 32 characters or less' });
-            }
-
-            if (displayName !== undefined && displayName !== null &&
-                (typeof displayName !== 'string' || displayName.trim().length > 32)) {
-                return res.status(400).json({ error: 'Display name must be text of 32 characters or less' });
-            }
-
-            const safeUsername = username.trim().toLowerCase();
-            const safeDisplayName = displayName && displayName.trim() ? displayName.trim() : safeUsername;
-
-            const users = await readUsers();
-
-            // Check if username exists
-            if (users[safeUsername]) {
-                // If it exists, we only allow updating if it's the same "session" or we just treat it as a login/update
-                // For this simple app, we'll allow updating the display name for the existing username
-                users[safeUsername].displayName = safeDisplayName;
-                users[safeUsername].lastSeen = Date.now();
-            } else {
-                // Register new user
-                users[safeUsername] = {
-                    username: safeUsername,
-                    displayName: safeDisplayName,
-                    createdAt: Date.now(),
-                    lastSeen: Date.now()
-                };
-            }
-
-            await writeUsers(users);
-            res.json({ success: true, user: users[safeUsername] });
-        } catch (error) {
-            console.error('Error registering user:', error);
-            res.status(500).json({ error: 'Failed to register user' });
-        }
-    });
-});
-
-// Get all users (Config Mode)
-app.get('/api/users', async (req, res) => {
-    try {
-        const users = await readUsers();
-        // Convert users object to array for frontend
-        const userList = Object.values(users).map(user => ({
-            name: user.username,
-            displayName: user.displayName,
-            createdAt: user.createdAt,
-            lastSeen: user.lastSeen
-        }));
-        res.json(userList);
-    } catch (error) {
-        console.error('Error getting users:', error);
-        res.status(500).json({ error: 'Failed to get users' });
+app.param('listId', (req, res, next, listId) => {
+    if (!LIST_ID_PATTERN.test(listId)) {
+        return res.status(400).json({ error: 'Invalid list ID' });
     }
+    next();
 });
 
-// Delete a user
-app.delete('/api/users/:username', async (req, res) => {
-    await dbMutex.run(async () => {
-        try {
-            const username = req.params.username.toLowerCase();
-            const users = await readUsers();
-
-            if (!users[username]) {
-                return res.status(404).json({ error: 'User not found' });
-            }
-
-            delete users[username];
-            await writeUsers(users);
-            res.json({ success: true });
-        } catch (error) {
-            console.error('Error deleting user:', error);
-            res.status(500).json({ error: 'Failed to delete user' });
-        }
-    });
-});
-
-// Get user's favorite lists
-app.get('/api/favorites/:username', async (req, res) => {
+// Legacy: favorites of a username from before the no-login model. The client
+// calls this once to move them into the device's local "My lists".
+// Remove this route together with users.json.
+app.get('/api/legacy/favorites/:username', async (req, res) => {
     try {
         const username = req.params.username.toLowerCase();
         const users = await readUsers();
@@ -373,63 +338,25 @@ app.get('/api/favorites/:username', async (req, res) => {
             return res.status(404).json({ error: 'User not found' });
         }
 
-        res.json(user.favorites || []);
+        res.json({ favorites: user.favorites || [], displayName: user.displayName || null });
     } catch (error) {
-        console.error('Error getting favorites:', error);
+        console.error('Error getting legacy favorites:', error);
         res.status(500).json({ error: 'Failed to get favorites' });
     }
 });
 
-// Toggle favorite status for a list
-app.post('/api/favorites/:username/:listId', async (req, res) => {
-    await dbMutex.run(async () => {
-        try {
-            const username = req.params.username.toLowerCase();
-            const listId = req.params.listId;
-
-            const users = await readUsers();
-            const user = users[username];
-
-            if (!user) {
-                return res.status(404).json({ error: 'User not found' });
-            }
-
-            if (!user.favorites) {
-                user.favorites = [];
-            }
-
-            const index = user.favorites.indexOf(listId);
-            if (index > -1) {
-                // Remove from favorites
-                user.favorites.splice(index, 1);
-            } else {
-                // Add to favorites
-                user.favorites.push(listId);
-            }
-
-            await writeUsers(users);
-            res.json({ success: true, favorites: user.favorites });
-        } catch (error) {
-            console.error('Error toggling favorite:', error);
-            res.status(500).json({ error: 'Failed to toggle favorite' });
-        }
-    });
-});
-
-// Get all lists (Config Mode)
-app.get('/api/lists', async (req, res) => {
+// Admin: all lists, including soft-deleted ones
+app.get('/api/admin/lists', requireAdmin, async (req, res) => {
     try {
         const data = await readData();
-        const lists = Object.entries(data).map(([name, value]) => {
-            return {
-                name,
-                displayName: value.displayName || name,
-                creatorName: value.creatorName,
-                createdBy: value.createdBy,
-                updatedAt: value.updatedAt,
-                itemCount: value.items.length
-            };
-        });
+        const lists = Object.entries(data).map(([name, value]) => ({
+            name,
+            displayName: value.displayName || name,
+            creatorName: value.creatorName,
+            updatedAt: value.updatedAt,
+            deletedAt: value.deletedAt || null,
+            itemCount: value.items.length
+        }));
         res.json(lists);
     } catch (error) {
         console.error('Error getting lists:', error);
@@ -437,11 +364,11 @@ app.get('/api/lists', async (req, res) => {
     }
 });
 
-// Create a new list with a display name (Config Mode)
+// Create a new list
 app.post('/api/lists', async (req, res) => {
     await dbMutex.run(async () => {
         try {
-            const { displayName, createdBy, creatorName } = req.body;
+            const { displayName, creatorName } = req.body || {};
 
             if (!displayName || typeof displayName !== 'string' || displayName.trim() === '') {
                 return res.status(400).json({ error: 'Display name is required' });
@@ -451,17 +378,23 @@ app.post('/api/lists', async (req, res) => {
                 return res.status(400).json({ error: 'Display name must be 20 characters or less' });
             }
 
+            if (creatorName !== undefined && creatorName !== null &&
+                (typeof creatorName !== 'string' || creatorName.length > 32)) {
+                return res.status(400).json({ error: 'Creator name must be text of 32 characters or less' });
+            }
+
             const safeName = displayName.trim();
-
-            // Generate a unique ID for the list
-            const listId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-
             const data = await readData();
+
+            let listId = generateListId();
+            while (data[listId]) {
+                listId = generateListId();
+            }
+
             data[listId] = {
                 items: [],
                 displayName: safeName,
-                createdBy: createdBy || null,
-                creatorName: creatorName || null,
+                creatorName: creatorName && creatorName.trim() ? creatorName.trim() : null,
                 updatedAt: Date.now()
             };
 
@@ -479,58 +412,68 @@ app.get('/api/lists/:listId', async (req, res) => {
     try {
         const { listId } = req.params;
         const data = await readData();
-        const list = getList(data, listId);
+        const lookup = findActiveList(data, listId);
 
-        if (!list) {
-            return res.status(404).json({ error: 'List not found' });
+        if (!lookup.list) {
+            return sendLookupError(res, lookup);
         }
 
-        const listDetails = {
+        res.json({
             name: listId,
-            displayName: list.displayName || listId,
-            updatedAt: list.updatedAt,
-            itemCount: list.items.length
-        };
-
-        res.json(listDetails);
+            displayName: lookup.list.displayName || listId,
+            updatedAt: lookup.list.updatedAt,
+            itemCount: lookup.list.items.length
+        });
     } catch (error) {
         console.error('Error getting list details:', error);
         res.status(500).json({ error: 'Failed to retrieve list details' });
     }
 });
 
-// Delete a specific list (Config Mode)
+// Soft-delete a list. It stays restorable for DELETE_RETENTION_MS.
 app.delete('/api/lists/:listId', async (req, res) => {
     await dbMutex.run(async () => {
         try {
             const { listId } = req.params;
             const data = await readData();
+            const lookup = findActiveList(data, listId);
 
-            if (data[listId]) {
-                delete data[listId];
+            if (!lookup.list) {
+                return sendLookupError(res, lookup);
+            }
+
+            lookup.list.deletedAt = Date.now();
+            await writeData(data);
+            res.json({ success: true, deletedAt: lookup.list.deletedAt });
+        } catch (error) {
+            console.error('Error deleting list:', error);
+            res.status(500).json({ error: 'Failed to delete list' });
+        }
+    });
+});
+
+// Restore a soft-deleted list
+app.post('/api/lists/:listId/restore', async (req, res) => {
+    await dbMutex.run(async () => {
+        try {
+            const { listId } = req.params;
+            const data = await readData();
+            const list = data[listId];
+
+            if (!list) {
+                return res.status(404).json({ error: 'List not found' });
+            }
+
+            if (list.deletedAt) {
+                delete list.deletedAt;
+                list.updatedAt = Date.now();
                 await writeData(data);
-
-                // Also remove from all users' favorites
-                const users = await readUsers();
-                let usersUpdated = false;
-
-                for (const username in users) {
-                    const user = users[username];
-                    if (user.favorites && user.favorites.includes(listId)) {
-                        user.favorites = user.favorites.filter(id => id !== listId);
-                        usersUpdated = true;
-                    }
-                }
-
-                if (usersUpdated) {
-                    await writeUsers(users);
-                }
             }
 
             res.json({ success: true });
         } catch (error) {
-            console.error('Error deleting list:', error);
-            res.status(500).json({ error: 'Failed to delete list' });
+            console.error('Error restoring list:', error);
+            res.status(500).json({ error: 'Failed to restore list' });
         }
     });
 });
@@ -540,34 +483,30 @@ app.get('/api/items/:listId', async (req, res) => {
     try {
         const { listId } = req.params;
         const data = await readData();
+        const lookup = findActiveList(data, listId);
 
-        if (!data[listId]) {
-            return res.status(404).json({ error: 'List not found' });
+        if (!lookup.list) {
+            return sendLookupError(res, lookup);
         }
 
-        const list = getList(data, listId);
-        const items = list ? list.items : [];
-        res.json(items);
+        res.json(lookup.list.items);
     } catch (error) {
         console.error('Error getting items:', error);
         res.status(500).json({ error: 'Failed to retrieve items' });
     }
 });
 
-// Add a single item
+// Add a single item. The list must exist: this route never creates a list.
 app.post('/api/items/:listId', async (req, res) => {
     await dbMutex.run(async () => {
         try {
             const { listId } = req.params;
-            const incoming = req.body;
+            const incoming = req.body || {};
 
-            // Build a normalized item for validation
             const candidate = {
-                text: incoming && incoming.text,
-                amount: incoming && incoming.amount,
-                completed: !!(incoming && incoming.completed),
-                addedBy: incoming && incoming.addedBy ? String(incoming.addedBy) : 'Guest',
-                authorName: incoming && incoming.authorName ? String(incoming.authorName) : (incoming && incoming.addedBy ? String(incoming.addedBy) : 'Guest')
+                text: incoming.text,
+                amount: incoming.amount,
+                completed: !!incoming.completed
             };
 
             const validation = validateItemData(candidate);
@@ -576,35 +515,26 @@ app.post('/api/items/:listId', async (req, res) => {
             }
 
             const data = await readData();
+            const lookup = findActiveList(data, listId);
 
-            // Initialize list if missing (recreation logic)
-            if (!data[listId]) {
-                data[listId] = {
-                    items: [],
-                    displayName: incoming.displayName || listId,
-                    updatedAt: Date.now()
-                };
+            if (!lookup.list) {
+                return sendLookupError(res, lookup);
             }
 
-            const list = getList(data, listId);
-
-            // Ensure a unique server-generated id
-            let id = incoming && incoming.id ? String(incoming.id) : null;
-            if (!id || list.items.some(it => it.id === id)) {
-                id = crypto.randomUUID();
-            }
+            const authorName = typeof incoming.authorName === 'string' ? incoming.authorName.trim().slice(0, 32) : '';
 
             const newItem = {
-                id,
-                text: String(candidate.text).trim(),
-                completed: !!candidate.completed,
+                id: crypto.randomUUID(),
+                text: candidate.text.trim(),
+                completed: candidate.completed,
                 amount: typeof candidate.amount === 'number' ? candidate.amount : 1,
-                addedBy: String(candidate.addedBy),
-                authorName: String(candidate.authorName)
+                // addedBy: random device ID, not a person. authorName: optional nickname.
+                addedBy: typeof incoming.addedBy === 'string' ? incoming.addedBy.slice(0, 64) : null,
+                authorName: authorName || null
             };
 
-            list.items.push(newItem);
-            list.updatedAt = Date.now();
+            lookup.list.items.push(newItem);
+            lookup.list.updatedAt = Date.now();
 
             await writeData(data);
 
@@ -616,26 +546,65 @@ app.post('/api/items/:listId', async (req, res) => {
     });
 });
 
-// Update a single item
+// Change the amount on the server, so that concurrent taps are never lost.
+// The amount never goes below 1.
+function amountRoute(delta) {
+    return async (req, res) => {
+        await dbMutex.run(async () => {
+            try {
+                const { listId, itemId } = req.params;
+                const data = await readData();
+                const lookup = findActiveList(data, listId);
+
+                if (!lookup.list) {
+                    return sendLookupError(res, lookup);
+                }
+
+                const item = lookup.list.items.find(it => String(it.id) === itemId);
+                if (!item) {
+                    return res.status(404).json({ error: 'Item not found' });
+                }
+
+                const current = typeof item.amount === 'number' ? item.amount : 1;
+                const next = Math.max(1, current + delta);
+                if (next !== current) {
+                    item.amount = next;
+                    lookup.list.updatedAt = Date.now();
+                    await writeData(data);
+                }
+
+                res.json({ success: true, item });
+            } catch (error) {
+                console.error('Error changing amount:', error);
+                res.status(500).json({ error: 'Failed to change amount' });
+            }
+        });
+    };
+}
+
+app.post('/api/items/:listId/:itemId/increment', amountRoute(1));
+app.post('/api/items/:listId/:itemId/decrement', amountRoute(-1));
+
+// Update a single item (text, completed)
 app.patch('/api/items/:listId/:itemId', async (req, res) => {
     await dbMutex.run(async () => {
         try {
             const { listId, itemId } = req.params;
-            const updates = req.body;
+            const updates = req.body || {};
 
             const data = await readData();
-            const list = getList(data, listId);
+            const lookup = findActiveList(data, listId);
 
-            if (!list) {
-                return res.status(404).json({ error: 'List not found' });
+            if (!lookup.list) {
+                return sendLookupError(res, lookup);
             }
 
+            const list = lookup.list;
             const itemIndex = list.items.findIndex(item => String(item.id) === itemId);
             if (itemIndex === -1) {
                 return res.status(404).json({ error: 'Item not found' });
             }
 
-            // Sanitize and apply updates
             const sanitizedUpdates = sanitizeUpdates(updates);
             if (sanitizedUpdates.text !== undefined) {
                 if (typeof sanitizedUpdates.text !== 'string' || sanitizedUpdates.text.trim() === '' || sanitizedUpdates.text.length > 128) {
@@ -644,10 +613,8 @@ app.patch('/api/items/:listId/:itemId', async (req, res) => {
                 sanitizedUpdates.text = sanitizedUpdates.text.trim();
             }
 
-            if (sanitizedUpdates.amount !== undefined) {
-                if (typeof sanitizedUpdates.amount !== 'number' || sanitizedUpdates.amount < 1) {
-                    return res.status(400).json({ error: 'Invalid amount for update' });
-                }
+            if (sanitizedUpdates.completed !== undefined) {
+                sanitizedUpdates.completed = !!sanitizedUpdates.completed;
             }
 
             list.items[itemIndex] = { ...list.items[itemIndex], ...sanitizedUpdates };
@@ -669,13 +636,15 @@ app.delete('/api/items/:listId', async (req, res) => {
         try {
             const { listId } = req.params;
             const data = await readData();
-            const list = getList(data, listId);
+            const lookup = findActiveList(data, listId);
 
-            if (list) {
-                list.items = [];
-                list.updatedAt = Date.now();
-                await writeData(data);
+            if (!lookup.list) {
+                return sendLookupError(res, lookup);
             }
+
+            lookup.list.items = [];
+            lookup.list.updatedAt = Date.now();
+            await writeData(data);
 
             res.json({ success: true });
         } catch (error) {
@@ -691,14 +660,14 @@ app.delete('/api/items/:listId/completed', async (req, res) => {
         try {
             const { listId } = req.params;
             const data = await readData();
-            const list = getList(data, listId);
+            const lookup = findActiveList(data, listId);
 
-            if (!list) {
-                return res.status(404).json({ error: 'List not found' });
+            if (!lookup.list) {
+                return sendLookupError(res, lookup);
             }
 
-            list.items = list.items.filter(item => !item.completed);
-            list.updatedAt = Date.now();
+            lookup.list.items = lookup.list.items.filter(item => !item.completed);
+            lookup.list.updatedAt = Date.now();
 
             await writeData(data);
 
@@ -716,14 +685,14 @@ app.delete('/api/items/:listId/:itemId', async (req, res) => {
         try {
             const { listId, itemId } = req.params;
             const data = await readData();
-            const list = getList(data, listId);
+            const lookup = findActiveList(data, listId);
 
-            if (!list) {
-                return res.status(404).json({ error: 'List not found' });
+            if (!lookup.list) {
+                return sendLookupError(res, lookup);
             }
 
-            list.items = list.items.filter(item => String(item.id) !== itemId);
-            list.updatedAt = Date.now();
+            lookup.list.items = lookup.list.items.filter(item => String(item.id) !== itemId);
+            lookup.list.updatedAt = Date.now();
 
             await writeData(data);
 
@@ -740,19 +709,42 @@ app.get('/api', (req, res) => {
     res.json({ message: 'Shopping List API is running' });
 });
 
+// Unknown API routes answer JSON 404, not the SPA page
+app.use('/api', (req, res) => {
+    res.status(404).json({ error: 'Not found' });
+});
+
 // SPA Fallback: Serve index.html for any unknown routes (non-API)
 app.get('*', rateLimiter, (req, res) => {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
+// Remove soft-deleted lists that are older than the retention period
+async function purgeDeletedLists() {
+    await dbMutex.run(async () => {
+        const data = await readData();
+        const cutoff = Date.now() - DELETE_RETENTION_MS;
+        const expired = Object.keys(data).filter(id => data[id].deletedAt && data[id].deletedAt < cutoff);
+        if (expired.length === 0) return;
+        for (const id of expired) {
+            delete data[id];
+        }
+        await writeStore(DATA_FILE, data);
+        console.log(`Purged ${expired.length} deleted list(s)`);
+    });
+}
+
 // Initialize and start server
 async function startServer() {
     await ensureDataDir();
+    await purgeDeletedLists();
+    setInterval(() => {
+        purgeDeletedLists().catch(err => console.error('Purge failed:', err));
+    }, 24 * 60 * 60 * 1000);
     app.listen(PORT, '0.0.0.0', () => {
-        console.log(`Server running on port ${PORT}`);
+        console.log(`Server running on port ${PORT}${ADMIN_TOKEN ? ' (admin API enabled)' : ''}`);
     });
 }
 
 startServer().catch(console.error);
-

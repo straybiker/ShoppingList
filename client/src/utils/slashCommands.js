@@ -1,7 +1,7 @@
 export const processSlashCommand = async (text, navigate, context = {}) => {
     if (!text || !text.startsWith('/')) return false;
 
-    const { clearCache, saveCurrentListState, showToast } = context;
+    const { clearCache, showToast } = context;
     const cmd = text.trim();
 
     if (cmd === '/clear-cache') {
@@ -9,15 +9,9 @@ export const processSlashCommand = async (text, navigate, context = {}) => {
         return true;
     }
 
+    // Admin view: the server asks for the admin token
     if (cmd === '/config-lists') {
-        if (saveCurrentListState) saveCurrentListState();
         navigate('/config-lists');
-        return true;
-    }
-
-    if (cmd === '/config-users') {
-        if (saveCurrentListState) saveCurrentListState();
-        navigate('/config-users');
         return true;
     }
 

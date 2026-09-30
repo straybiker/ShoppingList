@@ -1,15 +1,25 @@
 import React, { useState, useRef } from 'react';
-import { Trash2, StarOff, Share2 } from 'lucide-react';
+import { X, Share2 } from 'lucide-react';
 
-export default function DashboardItem({ list, onOpen, onShare, onToggleFav, onDelete }) {
+// A missing list (purged) cannot open. A deleted list opens, so that it can be restored.
+const STATUS_LABEL = {
+    deleted: 'Deleted',
+    missing: 'No longer exists',
+    offline: 'Offline'
+};
+
+// Swipe left removes the list from this device only. The list itself stays.
+export default function DashboardItem({ list, onOpen, onShare, onRemove }) {
     const [offset, setOffset] = useState(0);
     const startX = useRef(null);
     const isDragging = useRef(false);
     const hasDragged = useRef(false);
 
+    const isGone = list.status === 'deleted' || list.status === 'missing';
+    const canOpen = list.status !== 'missing';
+
     // Gesture Handlers
     const handlePointerDown = (e) => {
-        if (list.isDeleted) return; // Disable swipe for deleted lists
         startX.current = e.clientX;
         isDragging.current = true;
         hasDragged.current = false; // Reset drag status
@@ -68,22 +78,27 @@ export default function DashboardItem({ list, onOpen, onShare, onToggleFav, onDe
             onPointerUp={handlePointerUp}
             onPointerLeave={handlePointerLeave}
         >
-            {/* Background Layer (Delete) */}
+            {/* Background Layer (Remove from this device) */}
             <div style={{
                 position: 'absolute',
                 top: 0,
                 bottom: 0,
                 right: 0,
                 width: '100%',
-                backgroundColor: '#ef4444',
+                backgroundColor: '#475569',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'flex-end',
                 paddingRight: '22px',
                 borderRadius: 'var(--radius-md)'
             }}>
-                <div onClick={() => onDelete(list.name)} style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                    <Trash2 size={20} color="#fff" />
+                <div
+                    onClick={() => { setOffset(0); onRemove(list.name); }}
+                    style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}
+                    role="button"
+                    aria-label="Remove from your lists"
+                >
+                    <X size={20} color="#fff" />
                 </div>
             </div>
 
@@ -109,28 +124,29 @@ export default function DashboardItem({ list, onOpen, onShare, onToggleFav, onDe
                             return;
                         }
 
-                        if (!list.isDeleted) {
+                        if (canOpen) {
                             onOpen(list);
                         }
                     }}
-                    style={{ cursor: list.isDeleted ? 'default' : 'pointer' }}
+                    style={{ cursor: canOpen ? 'pointer' : 'default' }}
                 >
                     <div className="text-content">
-                        <span className="item-author" style={{ fontSize: '0.65rem' }}>{list.itemCount} items</span>
-                        <span className={`item-text ${list.isDeleted ? 'text-danger line-through' : ''}`}>
+                        <span className="item-author" style={{ fontSize: '0.65rem' }}>
+                            {STATUS_LABEL[list.status] || `${list.itemCount} items`}
+                        </span>
+                        <span className={`item-text ${isGone ? 'text-danger line-through' : ''}`}>
                             {list.displayName || list.name}
                         </span>
                     </div>
                 </div>
 
-                <div className="item-actions" onPointerDown={(e) => e.stopPropagation()}>
-                    <button onClick={(e) => { e.stopPropagation(); onShare(list.name); }} className="delete-btn" style={{ color: 'var(--text-secondary)' }}>
-                        <Share2 size={18} />
-                    </button>
-                    <button onClick={(e) => { e.stopPropagation(); onToggleFav(list.name); }} className="delete-btn" style={{ color: 'var(--accent-color)' }}>
-                        <StarOff size={18} />
-                    </button>
-                </div>
+                {!isGone && (
+                    <div className="item-actions" onPointerDown={(e) => e.stopPropagation()}>
+                        <button onClick={(e) => { e.stopPropagation(); onShare(list.name); }} className="delete-btn" style={{ color: 'var(--text-secondary)' }} aria-label="Share list">
+                            <Share2 size={18} />
+                        </button>
+                    </div>
+                )}
             </div>
         </li>
     );

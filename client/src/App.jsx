@@ -1,109 +1,70 @@
 
-import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, useNavigate, Navigate } from 'react-router-dom';
 
 import { ToastProvider } from './context/ToastContext';
 import Home from './pages/Home';
-import Profile from './pages/Profile';
-import { User, ChevronLeft, Star } from 'lucide-react';
+import Settings from './pages/Settings';
+import { Settings as SettingsIcon, ChevronLeft, Share2, Trash2 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useToast } from './context/ToastContext';
+import { getMyListName, migrateLegacyProfile } from './utils/device';
+import { shareList, deleteListForEveryone } from './utils/listActions';
 
 import { useSearchParams } from 'react-router-dom';
 
 function Header() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const listDetails = searchParams.get('list');
+  const listId = searchParams.get('list');
   const { showToast } = useToast();
-  const [isFavorite, setIsFavorite] = useState(false);
   const [, setRefresh] = useState(0);
-  const user = localStorage.getItem('username');
 
   useEffect(() => {
-    const checkStatus = async () => {
-      if (!listDetails) {
-        setIsFavorite(false);
-        return;
-      }
-      if (!user) {
-        setIsFavorite(false);
-        return;
-      }
-      try {
-        const res = await fetch(`/api/favorites/${user}`);
-        if (res.ok) {
-          const favs = await res.json();
-          setIsFavorite(favs.includes(listDetails));
-        }
-      } catch (e) { }
-    };
-    checkStatus();
-  }, [listDetails, user]);
-
-  useEffect(() => {
-    const handleNameUpdate = () => setRefresh(prev => prev + 1);
-    window.addEventListener('listNameUpdated', handleNameUpdate);
-    return () => window.removeEventListener('listNameUpdated', handleNameUpdate);
+    const handleChange = () => setRefresh(prev => prev + 1);
+    window.addEventListener('myListsChanged', handleChange);
+    return () => window.removeEventListener('myListsChanged', handleChange);
   }, []);
 
-  const handleToggleFavorite = async () => {
-    if (!listDetails) return;
-    if (!user) {
-      showToast('Please sign in (Profile) to use favorites', 'error');
-      return;
-    }
-    try {
-      const res = await fetch(`/api/favorites/${user}/${listDetails}`, { method: 'POST' });
-      if (res.ok) {
-        const data = await res.json();
-        const newStatus = data.favorites.includes(listDetails);
-        setIsFavorite(newStatus);
-        showToast(newStatus ? 'List added to favorites' : 'List removed from favorites', 'success');
-      }
-    } catch (e) {
-      showToast('Failed to toggle favorite', 'error');
-    }
+  const listName = listId ? getMyListName(listId) : '';
+
+  const handleDelete = async () => {
+    const deleted = await deleteListForEveryone(listId, listName, showToast);
+    if (deleted) navigate('/');
   };
 
-
-
-  // Title Logic
   // Title Logic
   const getTitle = () => {
-    if (location.pathname === '/profile') return 'User Profile';
-    if (listDetails) {
-      return localStorage.getItem('currentListName') || 'Shopping List';
-    }
+    if (location.pathname === '/settings') return 'Settings';
+    if (listId) return listName || 'Shopping List';
     return 'Shopping List';
   };
 
   // Subtitle Logic
   const getSubtitle = () => {
-    if (location.pathname === '/profile') return 'Identify yourself to your shopping buddies.';
-    if (location.pathname === '/' && !listDetails) {
+    if (location.pathname === '/settings') return 'Tell your shopping buddies who you are.';
+    if (location.pathname === '/' && !listId) {
       return 'Stay organized, buy smart.';
     }
     if (location.pathname === '/config-lists') return 'Configuration: Manage Lists';
-    if (location.pathname === '/config-users') return 'Configuration: Manage Users';
     return null;
   };
 
-  const isDashboard = location.pathname === '/' && !listDetails;
-  const isProfile = location.pathname === '/profile';
+  const isDashboard = location.pathname === '/' && !listId;
+  const isSettings = location.pathname === '/settings';
   const isConfig = location.pathname.startsWith('/config');
 
-  const showProfileIcon = location.pathname === '/' && !listDetails;
-  const showBackButton = location.pathname === '/profile' || !!listDetails || isConfig;
+  const showBackButton = isSettings || !!listId || isConfig;
 
   let headerClass = 'header-list';
   if (isDashboard || isConfig) headerClass = 'header-dashboard';
-  if (isProfile) headerClass = 'header-profile';
+  if (isSettings) headerClass = 'header-profile';
 
   return (
     <header className={`app-header ${headerClass}`}>
       <div className="header-left">
         {showBackButton && (
-          <a href="/" className="icon-btn back-btn">
+          <a href="/" className="icon-btn back-btn" aria-label="Back to your lists">
             <ChevronLeft size={24} />
           </a>
         )}
@@ -120,24 +81,33 @@ function Header() {
 
 
       <div className="header-right">
-        {showProfileIcon && (
+        {isDashboard && (
           <a
-            href="/profile"
+            href="/settings"
             className="icon-btn"
             style={{ width: '40px', height: '40px', padding: 0 }}
+            aria-label="Settings"
           >
-            <User size={24} />
+            <SettingsIcon size={24} />
           </a>
         )}
-        {listDetails && (
+        {listId && !isConfig && (
           <>
-
             <button
-              onClick={handleToggleFavorite}
-              className={`icon-btn ${isFavorite ? 'text-yellow-400' : 'text-slate-500'}`}
+              onClick={() => shareList(listId, listName, showToast)}
+              className="icon-btn text-slate-500"
               style={{ width: '40px', height: '40px', padding: 0 }}
+              aria-label="Share list"
             >
-              <Star size={24} fill={isFavorite ? "currentColor" : "none"} />
+              <Share2 size={22} />
+            </button>
+            <button
+              onClick={handleDelete}
+              className="icon-btn text-slate-500"
+              style={{ width: '40px', height: '40px', padding: 0 }}
+              aria-label="Delete list for everyone"
+            >
+              <Trash2 size={22} />
             </button>
           </>
         )}
@@ -158,6 +128,15 @@ function Layout({ children }) {
 }
 
 function App() {
+  const [migrated, setMigrated] = useState(false);
+
+  // Import the old username profile before the first render of the lists
+  useEffect(() => {
+    migrateLegacyProfile().finally(() => setMigrated(true));
+  }, []);
+
+  if (!migrated) return null;
+
   return (
     <ToastProvider>
       <Router>
@@ -165,9 +144,9 @@ function App() {
           <Header />
           <Routes>
             <Route path="/" element={<Home />} />
-            <Route path="/profile" element={<Profile />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/profile" element={<Navigate to="/settings" replace />} />
             <Route path="/config-lists" element={<Home />} />
-            <Route path="/config-users" element={<Home />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </Layout>
