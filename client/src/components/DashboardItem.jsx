@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { X, Share2 } from 'lucide-react';
+import { Trash2, Share2 } from 'lucide-react';
 
 // A missing list (purged) cannot open. A deleted list opens, so that it can be restored.
 const STATUS_LABEL = {
@@ -85,7 +85,7 @@ export default function DashboardItem({ list, onOpen, onShare, onRemove }) {
                 bottom: 0,
                 right: 0,
                 width: '100%',
-                backgroundColor: '#475569',
+                backgroundColor: '#ef4444',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'flex-end',
@@ -98,7 +98,7 @@ export default function DashboardItem({ list, onOpen, onShare, onRemove }) {
                     role="button"
                     aria-label="Remove from your lists"
                 >
-                    <X size={20} color="#fff" />
+                    <Trash2 size={20} color="#fff" />
                 </div>
             </div>
 

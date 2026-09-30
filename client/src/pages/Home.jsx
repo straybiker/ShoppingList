@@ -462,8 +462,12 @@ export default function Home() {
                                     placeholder="Admin token"
                                     autoComplete="off"
                                 />
-                                <button type="submit" aria-label="Unlock admin mode">
-                                    <Plus size={24} strokeWidth={2} />
+                                <button
+                                    type="submit"
+                                    className="btn-primary"
+                                    style={{ width: 'auto', padding: '0 16px', fontWeight: '600', fontSize: '1rem' }}
+                                >
+                                    Login
                                 </button>
                             </div>
                         </form>
